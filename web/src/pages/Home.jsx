@@ -69,10 +69,12 @@ export default function Home() {
       <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3 mb-10">
         {APPS.map((a) => (
           <Link key={a.id} to={`/${a.id}`} className="group flex gap-3.5 p-4 rounded-xl bg-surface border border-line hover:border-accent/40 hover:-translate-y-0.5 transition">
-            <AppTile app={a} size={46} />
+            <AppTile app={a} size={58} />
             <div className="min-w-0">
-              <div className="font-semibold flex items-center gap-2">{a.name}<span className="text-[11px] font-normal text-fg3">like {a.like}</span></div>
-              <div className="text-[13px] text-fg2 leading-snug mt-0.5">{a.tagline}</div>
+              <div className="font-semibold leading-tight">{a.name}</div>
+              {a.kana && <div className="text-[11px] text-fg3 leading-tight">{a.kana}</div>}
+              <div className="text-[10.5px] uppercase tracking-[0.16em] text-accent font-semibold mt-0.5" title={`Like ${a.like}`}>{a.role}</div>
+              <div className="text-[13px] text-fg2 leading-snug mt-1">{a.tagline}</div>
             </div>
           </Link>
         ))}

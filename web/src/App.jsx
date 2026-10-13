@@ -4,11 +4,11 @@ import { lazy, Suspense, useMemo } from 'react';
 import { Routes, Route, useParams, Navigate } from 'react-router-dom';
 import { useApp } from './lib/app.jsx';
 import { appById } from './lib/apps.js';
-import { MenuHost, DialogHost, Toaster, Spinner, Button } from './components/ui.jsx';
-import { Logo } from './components/Brand.jsx';
+import { MenuHost, DialogHost, Toaster, Spinner } from './components/ui.jsx';
 import Home from './pages/Home.jsx';
 import NewProject from './pages/NewProject.jsx';
 import AppHome from './pages/AppHome.jsx';
+import SignIn from './pages/SignIn.jsx';
 
 const EDITORS = import.meta.glob('./apps/*/index.jsx');
 const PAGES = import.meta.glob('./pages/{Files,Libraries,Fonts,Color,Admin,Encoder}.jsx');
@@ -16,20 +16,6 @@ const lazyCache = {};
 const lazyFrom = (map, key) => (map[key] ? (lazyCache[key] ||= lazy(map[key])) : null);
 
 const Loading = () => <div className="h-full grid place-items-center"><Spinner size={28} /></div>;
-
-function SignIn() {
-  const { signIn, config } = useApp();
-  return (
-    <div className="h-full grid place-items-center p-6 bg-[radial-gradient(ellipse_at_top,rgba(139,124,255,.25),transparent_60%)]">
-      <div className="text-center max-w-md">
-        <Logo size={56} className="mb-6" />
-        <h1 className="font-head font-bold text-2xl mb-2">Your creative studio in the {config.brand || 'Mirai'} suite</h1>
-        <p className="text-fg2 mb-6">Photo, Vector, Layout, Cut, Motion, Audio, PDF and more — saved to your account, shared with your team, and connected to Minami Cloud and Tsunami.</p>
-        <Button size="lg" variant="sky" onClick={() => signIn()}>Sign in with {config.brand || 'Mirai'} Account</Button>
-      </div>
-    </div>
-  );
-}
 
 function Editor() {
   const { app, id } = useParams();

@@ -94,7 +94,9 @@ authRouter.get('/auth/login', async (req, res) => {
   const nonce = crypto.randomBytes(16).toString('base64url');
   const verifier = crypto.randomBytes(32).toString('base64url');
   const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
-  res.cookie(FLOW_COOKIE, await sign({ state, nonce, verifier, ret }, '10m'), { ...cookieOpts, maxAge: 10 * 60e3 });
+  // remember=0 ("Remember me" unticked): the SoraLab session ends when the browser closes.
+  const remember = req.query.remember !== '0';
+  res.cookie(FLOW_COOKIE, await sign({ state, nonce, verifier, ret, remember }, '10m'), { ...cookieOpts, maxAge: 10 * 60e3 });
   const u = new URL(`${config.accountsUrl}/authorize`);
   u.search = new URLSearchParams({
     response_type: 'code', client_id: config.clientId, redirect_uri: redirectUri, scope: 'openid profile email offline_access',
@@ -112,7 +114,7 @@ authRouter.get('/auth/callback', async (req, res) => {
     const tok = await tokenRequest({ grant_type: 'authorization_code', code: String(req.query.code), redirect_uri: redirectUri, code_verifier: flow.verifier });
     const user = upsertUser(await verifyIdToken(tok.id_token, flow.nonce), tok.refresh_token);
     if (user.disabled) return res.status(403).send('This account has been suspended from SoraLab by an admin.');
-    res.cookie(SESSION_COOKIE, await sign({ uid: user.id, sv: user.session_ver }, '30d'), { ...cookieOpts, maxAge: 30 * 864e5 });
+    res.cookie(SESSION_COOKIE, await sign({ uid: user.id, sv: user.session_ver }, '30d'), flow.remember === false ? cookieOpts : { ...cookieOpts, maxAge: 30 * 864e5 });
     res.redirect(flow.ret || '/');
   } catch (e) {
     console.error('[auth] sign-in failed:', e.message);
