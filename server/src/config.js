@@ -43,6 +43,11 @@ export const config = {
   videoEncoder: process.env.VIDEO_ENCODER || 'auto',
   renderJobs: Math.max(1, Number(process.env.RENDER_JOBS || 1)),
   versionsPerDoc: Number(process.env.VERSIONS_PER_DOC || 50),
+  // HTTPS on the home network (set by the suite's setup; needed for the mic): see lan-https.js.
+  httpsPort: Number(process.env.HTTPS_PORT || 0),
+  tlsCert: process.env.TLS_CERT ? path.resolve(ROOT, process.env.TLS_CERT) : '',
+  tlsKey: process.env.TLS_KEY ? path.resolve(ROOT, process.env.TLS_KEY) : '',
+  lanCaCert: process.env.LAN_CA_CERT ? path.resolve(ROOT, process.env.LAN_CA_CERT) : '',
 };
 
 for (const d of ['docs', 'assets', 'fonts', 'jobs', 'tmp']) fs.mkdirSync(path.join(config.dataDir, d), { recursive: true });

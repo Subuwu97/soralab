@@ -7,6 +7,7 @@ import { db, newId, now, json } from '../db.js';
 import { requireUser } from '../auth.js';
 import { h, fail, clean, loadDoc, docDir, roleFor, checkQuota, userOut } from './util.js';
 import { notifier } from '../notify.js';
+import { viaSecure } from '../suite-images.js';
 
 export const docs = express.Router();
 docs.use('/docs', requireUser);
@@ -272,7 +273,7 @@ docs.delete('/docs/:id/shares/:userId', (req, res) => {
 // ---------------------------------------------------------------- review comments
 
 const commentOut = (c) => ({ id: c.id, parent_id: c.parent_id, body: c.body, anchor: json(c.anchor, null), resolved: !!c.resolved, created_at: c.created_at,
-  author: { id: c.author, name: c.author_name, picture: c.author_picture } });
+  author: { id: c.author, name: c.author_name, picture: viaSecure(c.author_picture) } });
 docs.get('/docs/:id/comments', (req, res) => {
   const { doc } = loadDoc(req, req.params.id);
   const rows = db.prepare(`SELECT c.*, u.name AS author_name, u.picture AS author_picture FROM doc_comments c JOIN users u ON u.id = c.author

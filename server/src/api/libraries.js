@@ -7,6 +7,7 @@ import { config } from '../config.js';
 import { db, newId, now, json } from '../db.js';
 import { requireUser } from '../auth.js';
 import { h, fail, clean, loadAsset, checkQuota, usageOf, quotaOf } from './util.js';
+import { viaSecure } from '../suite-images.js';
 
 export const libraries = express.Router();
 for (const p of ['/libraries', '/library-items', '/fonts', '/me']) libraries.use(p, requireUser);
@@ -177,7 +178,7 @@ libraries.delete('/fonts/:id', (req, res) => {
 
 libraries.get('/me', (req, res) => {
   const u = req.user;
-  res.json({ id: u.id, username: u.username, name: u.name, email: u.email, picture: u.picture, is_admin: !!u.is_admin, settings: json(u.settings),
+  res.json({ id: u.id, username: u.username, name: u.name, email: u.email, picture: viaSecure(u.picture), is_admin: !!u.is_admin, settings: json(u.settings),
     storage: { ...usageOf(u.id), quota: quotaOf() } });
 });
 /** PATCH /api/me/settings { ...partial } — merged into the stored settings (theme, workspaces, recent colours, shortcuts…). */

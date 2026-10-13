@@ -15,11 +15,16 @@ import { admin } from './api/admin.js';
 import { errorHandler } from './api/util.js';
 import { notifier } from './notify.js';
 import { warmUp } from './hwaccel.js';
+import { lanHttps } from './lan-https.js';
+import { suiteImageRoute } from './suite-images.js';
 
 const app = express();
 app.disable('x-powered-by');
 if (config.trustProxy) app.set('trust proxy', true);
 app.use(cookieParser());
+const secure = lanHttps({ appName: 'SoraLab', httpsPort: config.httpsPort, cert: config.tlsCert, key: config.tlsKey, ca: config.lanCaCert, publicUrl: config.publicUrl, host: config.host,
+  skip: /^\/(api|auth|certificate|sora|brand|assets|favicon|manifest|sw\.js)(\/|\.|$)/ });
+secure.routes(app);
 // Editors use SharedArrayBuffer-free features only, but pages must never be framed by other sites.
 app.use((req, res, next) => { res.set('X-Frame-Options', 'SAMEORIGIN'); next(); });
 
@@ -28,8 +33,9 @@ app.use(authRouter);
 app.get('/api/config', (req, res) => res.json({
   brand: config.brand, public_url: config.publicUrl, accounts_url: config.accountsUrl,
   cloud_url: config.cloudUrl || null, photos_url: config.photosUrl || null, tsunami_url: config.tsunamiUrl || null,
-  cloud: cloudEnabled(), tsunami: tsunamiEnabled(), max_upload_mb: config.maxUploadMb, signed_in: !!req.user,
+  cloud: cloudEnabled(), tsunami: tsunamiEnabled(), secure_url: secure.secureUrl, max_upload_mb: config.maxUploadMb, signed_in: !!req.user,
 }));
+app.get('/api/suite-image', suiteImageRoute);
 // The suite's bell (notifications from every app).
 app.use('/api/notifications', express.json());
 notifier.routes(app, { subOf: (req) => req.user?.id || null, prefix: '/api' });
@@ -45,6 +51,7 @@ if (fs.existsSync(path.join(config.webDist, 'index.html'))) {
   app.get('/', (req, res) => res.type('text').send('SoraLab API is running. Build the web app (npm run build).'));
 }
 
+secure.listen(app);
 app.listen(config.port, config.host, () => {
   console.log(`[soralab] ${config.publicUrl} (listening ${config.host}:${config.port}) — accounts: ${config.accountsUrl}`);
   warmUp();

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
 import { db, json } from '../db.js';
+import { viaSecure } from '../suite-images.js';
 
 export class HttpError extends Error {
   constructor(status, code, message) { super(message || code); this.status = status; this.code = code; }
@@ -79,4 +80,4 @@ export function checkQuota(userId, adding = 0) {
 }
 export { dirSize, json };
 
-export const userOut = (u) => u && ({ id: u.id, username: u.username, name: u.name, picture: u.picture || null });
+export const userOut = (u) => u && ({ id: u.id, username: u.username, name: u.name, picture: viaSecure(u.picture) || null });
