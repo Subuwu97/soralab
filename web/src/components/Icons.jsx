@@ -1,0 +1,102 @@
+// Line icons (24×24, drawn with the current text colour). <Icon name="brush" size={18} />
+// Each entry is one or more SVG path "d" strings; add new ones here so every app can use them.
+const P = {
+  // general
+  plus: 'M12 5v14M5 12h14', minus: 'M5 12h14', close: 'M6 6l12 12M18 6 6 18', check: 'M5 12.5l4.5 4.5L19 7.5',
+  chevronDown: 'M6 9l6 6 6-6', chevronRight: 'M9 6l6 6-6 6', chevronLeft: 'M15 6l-6 6 6 6', chevronUp: 'M6 15l6-6 6 6',
+  back: 'M19 12H5M11 6l-6 6 6 6', more: ['M5 12h.01', 'M12 12h.01', 'M19 12h.01'], moreV: ['M12 5h.01', 'M12 12h.01', 'M12 19h.01'],
+  menu: 'M4 6h16M4 12h16M4 18h16', search: ['M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z', 'M20 20l-4-4'],
+  home: ['M4 11l8-7 8 7', 'M6 9.5V20h12V9.5'], apps: ['M4 4h6v6H4z', 'M14 4h6v6h-6z', 'M4 14h6v6H4z', 'M14 14h6v6h-6z'],
+  grid: ['M4 4h16v16H4z', 'M4 12h16', 'M12 4v16'], list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
+  star: 'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z',
+  trash: ['M4 7h16', 'M10 11v6M14 11v6', 'M6 7l1 13h10l1-13', 'M9 7V4h6v3'], edit: ['M4 20h4L19 9l-4-4L4 16v4Z', 'M13.5 6.5l4 4'],
+  copy: ['M9 9h11v11H9z', 'M5 15H4V4h11v1'], duplicate: ['M8 8h12v12H8z', 'M4 16V4h12', 'M14 11v6M11 14h6'],
+  download: ['M12 4v11', 'M7 10l5 5 5-5', 'M5 20h14'], upload: ['M12 20V9', 'M7 14l5-5 5 5', 'M5 4h14'],
+  share: ['M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', 'M6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', 'M18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', 'M8.6 13.5l6.8 4M15.4 6.5l-6.8 4'],
+  link: ['M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1', 'M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1'],
+  cloud: 'M7 18h10.5a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 8.5 4.75 4.75 0 0 0 7 18Z',
+  folder: 'M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z',
+  file: ['M6 3h8l5 5v13H6z', 'M14 3v5h5'], image: ['M4 5h16v14H4z', 'M4 16l5-5 4 4 3-3 4 4', 'M15.5 9.5h.01'],
+  video: ['M3 6h13v12H3z', 'M16 10l5-3v10l-5-3'], audio: ['M9 18V6l10-2v12', 'M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', 'M16 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'],
+  pdf: ['M6 3h8l5 5v13H6z', 'M14 3v5h5', 'M9 13h1.5a1.5 1.5 0 0 1 0 3H9v-3Zm0 3v2'], font: ['M5 20 11 4h2l6 16', 'M7.5 14h9'],
+  palette: ['M12 3a9 9 0 1 0 0 18c1.1 0 1.5-.8 1.5-1.5 0-1.2-1-1.5-1-2.5S13.3 15 14.5 15H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8Z', 'M7.5 11h.01M10 7h.01M14.5 7h.01'],
+  library: ['M4 4h4v16H4z', 'M10 4h4v16h-4z', 'M16 5l3.5-1 2.5 15.5-3.5 1z'],
+  settings: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', 'M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z'],
+  sliders: ['M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0', 'M16 4v4M10 10v4M18 16v4'],
+  info: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 11v6M12 7.5h.01'], help: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.5v.7M12 17h.01'],
+  warning: ['M12 4 2.5 20h19z', 'M12 10v4M12 17h.01'], history: ['M3 12a9 9 0 1 0 3-6.7L3 8', 'M3 3v5h5', 'M12 7v5l3 2'],
+  clock: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 7v5l3 2'], comment: 'M5 5h14v10H9l-4 4z', bell: ['M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z', 'M10 20a2 2 0 0 0 4 0'],
+  user: ['M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z', 'M4 21a8 8 0 0 1 16 0'], users: ['M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z', 'M2 21a7 7 0 0 1 14 0', 'M16 3.5a4 4 0 0 1 0 7.5M22 21a7 7 0 0 0-4.5-6.5'],
+  lock: ['M6 11h12v10H6z', 'M8 11V7a4 4 0 1 1 8 0v4'], unlock: ['M6 11h12v10H6z', 'M8 11V7a4 4 0 0 1 7.5-2'],
+  eye: ['M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'], eyeOff: ['M3 3l18 18', 'M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3 3.9M6.6 6.6C3.9 8.3 2 12 2 12s3.5 7 10 7c1.9 0 3.5-.6 4.9-1.4', 'M9.9 9.9a3 3 0 0 0 4.2 4.2'],
+  sun: ['M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z', 'M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4'], moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z',
+  undo: ['M9 14 4 9l5-5', 'M4 9h10a6 6 0 0 1 0 12h-3'], redo: ['M15 14l5-5-5-5', 'M20 9H10a6 6 0 0 0 0 12h3'],
+  save: ['M5 3h11l3 3v15H5z', 'M8 3v6h8V3', 'M8 21v-7h8v7'], export: ['M12 3v12', 'M7 8l5-5 5 5', 'M5 13v8h14v-8'], import: ['M12 15V3', 'M7 10l5 5 5-5', 'M5 13v8h14v-8'],
+  play: 'M7 4.5v15l13-7.5z', pause: ['M7 4h3.5v16H7z', 'M13.5 4H17v16h-3.5z'], stop: 'M6 6h12v12H6z', record: 'M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z',
+  skipBack: ['M18 5v14L8 12z', 'M6 5v14'], skipForward: ['M6 5v14l10-7z', 'M18 5v14'], loop: ['M17 2l3 3-3 3', 'M20 5H8a4 4 0 0 0-4 4v1', 'M7 22l-3-3 3-3', 'M4 19h12a4 4 0 0 0 4-4v-1'],
+  volume: ['M4 9v6h4l5 4V5L8 9z', 'M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12'], mute: ['M4 9v6h4l5 4V5L8 9z', 'M17 9l5 6M22 9l-5 6'], mic: ['M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z', 'M5 11a7 7 0 0 0 14 0M12 18v3'],
+  zoomIn: ['M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z', 'M20 20l-4-4M8 11h6M11 8v6'], zoomOut: ['M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z', 'M20 20l-4-4M8 11h6'],
+  fit: ['M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5'], fullscreen: ['M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5'],
+  layers: ['M12 3 2 8l10 5 10-5z', 'M2 13l10 5 10-5', 'M2 17.5l10 5 10-5'], layer: ['M12 4 3 9l9 5 9-5z'],
+  group: ['M3 3h7v7H3z', 'M14 14h7v7h-7z', 'M10 6.5h4v11'], ungroup: ['M3 3h7v7H3z', 'M14 14h7v7h-7z'],
+  mask: ['M4 4h16v16H4z', 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z'], adjust: ['M12 21a9 9 0 1 0 0-18v18Z', 'M12 3a9 9 0 0 1 0 18'],
+  fx: ['M5 20c3 0 3-16 6-16', 'M5 11h6', 'M14 10l6 8M20 10l-6 8'], link2: ['M9 17H7a5 5 0 0 1 0-10h2', 'M15 7h2a5 5 0 0 1 0 10h-2', 'M8 12h8'],
+  // tools
+  move: ['M12 2v20M2 12h20', 'M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3'], select: 'M5 3l14 8-6 2-3 6z', directSelect: ['M5 3l14 8-6 2-3 6z', 'M17 17h4v4h-4z'],
+  marquee: ['M4 4h3M10 4h4M17 4h3v3M20 10v4M20 17v3h-3M14 20h-4M7 20H4v-3M4 14v-4'], ellipseMarquee: ['M12 4a8 7 0 0 0 0 16', 'M12 4a8 7 0 0 1 0 16'],
+  lasso: ['M7 19c-2 0-3-1-3-2.5S6 14 8 15c-3-1.5-5-4-5-6.5C3 5 7 3 12 3s9 2 9 5.5S17 15 12 15c-1.3 0-2.6-.2-3.7-.6', 'M7 19l1.5 2'], wand: ['M4 20 15 9', 'M17 3v3M15.5 4.5h3M20 7v2M19 8h2M14 2v1.5'],
+  crop: ['M6 2v16h16', 'M2 6h16v16'], slice: ['M3 21 21 3', 'M3 3h18v18'], eyedropper: ['M14 4l6 6', 'M17 3a2.1 2.1 0 0 1 3 3l-2 2-3-3z', 'M15 7 5 17v2h2L17 9'],
+  brush: ['M18 3l3 3-9 9-3-3z', 'M9 12c-3 0-5 2-5 5 0 1.5-1 2.5-2 3 4 1 9 0 9-4'], pencil: ['M4 20l1-5L16 4l4 4L9 19z', 'M14 6l4 4'],
+  eraser: ['M16 3l5 5-11 11H5l-3-3z', 'M9 8l7 7', 'M5 19h15'], fill: ['M5 11l7-7 8 8-7 7z', 'M5 11h15', 'M20 16s2 2.2 2 3.5a2 2 0 0 1-4 0c0-1.3 2-3.5 2-3.5Z'],
+  gradient: ['M4 4h16v16H4z', 'M4 4l16 16'], clone: ['M8 3l2 2-6 6-2-2z', 'M10 5l3 3', 'M14 13h7v8h-7z'], heal: ['M4 14l10-10 6 6-10 10z', 'M10 10l4 4M8 12h.01M12 8h.01'],
+  dodge: ['M12 3a5 5 0 1 1 0 10', 'M12 13v8'], blur: 'M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11Z', smudge: ['M8 21v-6l-3-3 3-3 3 3', 'M11 12l2-8 2 8 3 3-3 3'],
+  text: ['M5 5h14', 'M12 5v15', 'M9 20h6'], textBox: ['M3 3h18v18H3z', 'M8 8h8M12 8v9'], textPath: ['M3 18c4-8 14-8 18 0', 'M8 6h8M12 6v6'],
+  pen: ['M12 19l7-7 3 3-7 7z', 'M18 13l-1.5-7.5L2 2l3.5 14.5L13 18z', 'M2 2l7.6 7.6', 'M11 13a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z'], curvature: ['M3 20C3 9 21 15 21 4', 'M3 20h.01M21 4h.01M12 12h.01'],
+  anchorAdd: ['M12 12h.01', 'M8 8h8v8H8z', 'M19 3v4M17 5h4'], anchorDelete: ['M8 8h8v8H8z', 'M17 5h4'],
+  rect: 'M4 6h16v12H4z', ellipse: 'M12 19c4.4 0 8-3.1 8-7s-3.6-7-8-7-8 3.1-8 7 3.6 7 8 7Z', polygon: 'M12 3l9 7-3.5 10h-11L3 10z', starShape: 'M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z',
+  line: 'M5 19 19 5', arrow: ['M5 19 19 5', 'M10 5h9v9'], shapes: ['M4 14h7v7H4z', 'M17.5 10a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Z', 'M14 21l3.5-7 3.5 7z'],
+  hand: ['M8 13V5.5a1.5 1.5 0 0 1 3 0V12', 'M11 11.5v-8a1.5 1.5 0 0 1 3 0V12', 'M14 6.5a1.5 1.5 0 0 1 3 0V13', 'M17 9.5a1.5 1.5 0 0 1 3 0V15a7 7 0 0 1-7 7h-1a7 7 0 0 1-5.5-2.7L3.3 15a1.5 1.5 0 0 1 2.4-1.8L8 15'],
+  zoom: ['M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z', 'M20 20l-4-4'], rotate: ['M21 12a9 9 0 1 1-3-6.7L21 8', 'M21 3v5h-5'],
+  flipH: ['M12 3v18', 'M8 7l-5 5 5 5z', 'M16 7l5 5-5 5z'], flipV: ['M3 12h18', 'M7 8l5-5 5 5z', 'M7 16l5 5 5-5z'],
+  scale: ['M4 14v6h6', 'M4 20 20 4', 'M14 4h6v6'], transform: ['M5 5h14v14H5z', 'M3 3h4v4H3zM17 3h4v4h-4zM3 17h4v4H3zM17 17h4v4h-4z'],
+  artboard: ['M7 3v18M17 3v18M3 7h18M3 17h18'], frame: ['M4 4h16v16H4z', 'M4 4l16 16M20 4 4 20'], page: ['M6 3h12v18H6z', 'M9 7h6M9 11h6M9 15h4'], pages: ['M8 3h12v15H8z', 'M4 7v14h12'],
+  scissors: ['M6 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', 'M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', 'M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12'], razor: ['M4 4l16 16', 'M9 15l-5 5', 'M15 9l5-5'],
+  ripple: ['M4 6h6v12H4z', 'M14 6h6v12h-6z', 'M10 12h4'], slip: ['M4 6h16v12H4z', 'M9 12h6M9 12l2-2M9 12l2 2'], magnet: ['M6 3v8a6 6 0 0 0 12 0V3', 'M6 7h4M14 7h4', 'M10 3v8a2 2 0 0 0 4 0V3'],
+  marker: ['M6 3h12v14l-6 4-6-4z'], keyframe: 'M12 3l9 9-9 9-9-9z', ease: 'M3 20C10 20 14 4 21 4', graph: ['M3 3v18h18', 'M6 16c4-1 6-9 13-10'],
+  transition: ['M3 5h8v14H3z', 'M13 5h8v14h-8z', 'M9 9l6 6M15 9l-6 6'], title: ['M4 6h16v12H4z', 'M8 10h8M12 10v5'], color: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 3v18', 'M12 12h9'],
+  onion: ['M6 6h12v12H6z', 'M3 9v12h12', 'M9 3h12v12'], frames: ['M3 5h18v14H3z', 'M8 5v14M16 5v14'], tween: ['M4 12h16', 'M4 8v8M20 8v8', 'M9 10l3 2-3 2'],
+  wave: 'M2 12h2l2-6 3 12 3-15 3 18 3-12 2 6h2', spectral: ['M4 20V10M8 20V4M12 20v-8M16 20V7M20 20v-4'], fadeIn: ['M3 20 21 4', 'M3 20h18'], fadeOut: ['M3 4l18 16', 'M3 20h18'],
+  normalize: ['M3 6h18M3 18h18', 'M12 8v8', 'M9 11l3-3 3 3M9 13l3 3 3-3'], noise: ['M2 12h3l2-4 2 8 2-6 2 4 2-2h7'], eq: ['M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3', 'M1 14h6M9 8h6M17 16h6'],
+  sign: ['M3 17c3-3 4-9 7-9 2 0 0 7 2 7s3-3 5-3 1 4 4 4', 'M3 21h18'], stamp: ['M8 21h8', 'M5 17h14v-3a3 3 0 0 0-3-3h-1V8a3 3 0 1 0-6 0v3H8a3 3 0 0 0-3 3z'], highlight: ['M9 11l-6 6v3h9l3-3', 'M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4'],
+  merge: ['M6 3v6a6 6 0 0 0 6 6h0a6 6 0 0 1 6 6', 'M18 3v6', 'M15 6l3-3 3 3'], split: ['M16 3h5v5', 'M8 3H3v5', 'M21 3l-7 7M3 3l7 7v11'], organize: ['M4 4h7v7H4z', 'M13 4h7v7h-7z', 'M4 13h7v7H4z', 'M13 13h7v7h-7z'],
+  form: ['M4 4h16v16H4z', 'M8 9h8M8 13h8M8 17h4'], checkbox: ['M4 4h16v16H4z', 'M8 12l3 3 5-6'], ruler: ['M3 17 17 3l4 4L7 21z', 'M7 13l2 2M10 10l2 2M13 7l2 2'], guides: ['M3 8h18M8 3v18'],
+  align: ['M4 4v16', 'M8 7h12v4H8zM8 13h7v4H8z'], alignLeft: ['M4 4v16', 'M8 7h12v4H8zM8 13h7v4H8z'], alignCenterH: ['M12 3v18', 'M5 7h14v4H5zM8 13h8v4H8z'], alignRight: ['M20 4v16', 'M4 7h12v4H4zM9 13h7v4H9z'],
+  alignTop: ['M4 4h16', 'M7 8h4v12H7zM13 8h4v7h-4z'], alignMiddle: ['M3 12h18', 'M7 5h4v14H7zM13 8h4v8h-4z'], alignBottom: ['M4 20h16', 'M7 4h4v12H7zM13 9h4v7h-4z'],
+  distributeH: ['M4 3v18M20 3v18', 'M9 7h6v10H9z'], distributeV: ['M3 4h18M3 20h18', 'M7 9h10v6H7z'],
+  bringFront: ['M8 8h12v12H8z', 'M4 4h10v2M4 4v10h2'], sendBack: ['M4 4h12v12H4z', 'M20 10v10H10'], boolean: ['M9 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z', 'M15 21a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z'],
+  paragraph: ['M13 4v16M17 4v16', 'M19 4H9.5a4.5 4.5 0 0 0 0 9H13'], bold: ['M7 4h6a4 4 0 0 1 0 8H7z', 'M7 12h7a4 4 0 0 1 0 8H7z'], italic: ['M10 4h9M5 20h9M15 4 9 20'], underline: ['M6 4v7a6 6 0 0 0 12 0V4', 'M4 21h16'],
+  sparkles: ['M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z', 'M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z'], wandMagic: ['M4 20 15 9', 'M15 4V2M15 16v-2M8 9H6M22 9h-2M17.8 11.8 19 13M17.8 6.2 19 5M12.2 6.2 11 5'],
+  phone: ['M7 2h10v20H7z', 'M11 18h2'], desktop: ['M3 4h18v12H3z', 'M8 20h8M12 16v4'], component: ['M12 2l4 4-4 4-4-4z', 'M18 8l4 4-4 4-4-4z', 'M6 8l4 4-4 4-4-4z', 'M12 14l4 4-4 4-4-4z'],
+  prototype: ['M5 4h6v6H5z', 'M13 14h6v6h-6z', 'M8 10v4a3 3 0 0 0 3 3h2', 'M11 15l2 2-2 2'],
+  render: ['M4 4h16v12H4z', 'M8 20h8', 'M10 8l4 2-4 2z'], queue: ['M4 6h11M4 12h11M4 18h7', 'M18 15v6M15 18h6'],
+  camera: ['M3 8h4l2-3h6l2 3h4v12H3z', 'M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z'], histogram: ['M4 20V14M8 20V8M12 20v-6M16 20V5M20 20v-9'],
+  compare: ['M12 3v18', 'M4 5h16v14H4z'], before: ['M4 5h16v14H4z', 'M12 5v14', 'M4 5l8 14'], presets: ['M4 6h16M4 12h10M4 18h6', 'M18 15l1.5 3L22 18.5 19.5 20 18 23l-1.5-3-2.5-1.5 2.5-.5z'],
+  temperature: ['M14 14.8V4a2 2 0 1 0-4 0v10.8a4 4 0 1 0 4 0Z'], drop: 'M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11Z', contrast: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 3v18', 'M12 3a9 9 0 0 1 0 18z'],
+  logout: ['M15 4h4v16h-4', 'M10 8l-4 4 4 4', 'M6 12h11'], external: ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v6H4V6h6'], refresh: ['M20 11a8 8 0 0 0-14.9-3', 'M4 4v4h4', 'M4 13a8 8 0 0 0 14.9 3', 'M20 20v-4h-4'],
+  pin: ['M12 17v5', 'M9 3h6l-1 6 4 4v2H6v-2l4-4z'], tag: ['M3 12V3h9l9 9-9 9z', 'M7.5 7.5h.01'], filter: 'M3 5h18l-7 8v6l-4 2v-8z', sort: ['M7 4v16M3 16l4 4 4-4', 'M17 20V4M13 8l4-4 4 4'],
+  keyboard: ['M3 6h18v12H3z', 'M7 10h.01M11 10h.01M15 10h.01M7 14h10'], panel: ['M3 4h18v16H3z', 'M15 4v16'], panelLeft: ['M3 4h18v16H3z', 'M9 4v16'],
+  dot: 'M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z', circle: 'M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z', square: 'M5 5h14v14H5z',
+};
+
+export function Icon({ name, size = 18, className = '', stroke = 1.75, title, fill = 'none' }) {
+  const d = P[name] || P.circle;
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} className={`shrink-0 ${className}`} fill={fill} stroke="currentColor" strokeWidth={stroke}
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden={title ? undefined : 'true'} role={title ? 'img' : undefined}>
+      {title && <title>{title}</title>}
+      {(Array.isArray(d) ? d : [d]).map((x, i) => <path key={i} d={x} />)}
+    </svg>
+  );
+}
+
+export const iconNames = Object.keys(P);

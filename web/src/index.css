@@ -1,0 +1,72 @@
+@import "tailwindcss";
+@source "../../suite/web";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* SoraLab brand ("sora" = sky): Sky #5AB4FF · Dusk Violet #8B7CFF · Dawn Pink #FF8FB1 · Sunrise #FFC36B · Night #0B0E1A · Cloud #F5F7FF.
+   Text: Inter; headings: Montserrat. Editors use calm neutral greys so artwork colours read true. */
+@theme {
+  --font-sans: Inter, "Noto Sans", "Segoe UI", system-ui, sans-serif;
+  --font-head: Montserrat, Inter, "Segoe UI", Arial, sans-serif;
+  --font-mono: "Source Code Pro", ui-monospace, Menlo, Consolas, monospace;
+  --color-bg: var(--bg);           /* page background (home, files) */
+  --color-surface: var(--surface); /* cards */
+  --color-panel: var(--panel);     /* editor panels, toolbars, menus bar */
+  --color-panel-2: var(--panel-2); /* panel headers, inputs inside panels */
+  --color-work: var(--work);       /* editor workspace behind the canvas */
+  --color-input: var(--input);
+  --color-fg: var(--fg);
+  --color-fg2: var(--fg2);
+  --color-fg3: var(--fg3);
+  --color-chip: var(--chip);
+  --color-chip-hover: var(--chip-hover);
+  --color-hover: var(--hover);
+  --color-active: var(--active);
+  --color-line: var(--line);
+  --color-menu: var(--menu);
+  --color-accent: #5AB4FF;
+  --color-accent-2: #8B7CFF;
+  --color-pink: #FF8FB1;
+  --color-sun: #FFC36B;
+  --color-night: #0B0E1A;
+  --color-danger: #ff5c6c;
+  --color-ok: #3ccf8e;
+  --color-warn: #ffb547;
+}
+
+:root, .dark {
+  --bg: #0d1020; --surface: #151a2e; --panel: #1d1f26; --panel-2: #26282f; --work: #121318; --input: #2c2e36; --menu: #23252c;
+  --fg: #eceef6; --fg2: #a8adbd; --fg3: #6c7184; --chip: rgba(255,255,255,.06); --chip-hover: rgba(255,255,255,.11);
+  --hover: rgba(255,255,255,.06); --active: rgba(90,180,255,.2); --line: rgba(255,255,255,.08);
+  color-scheme: dark;
+}
+.light {
+  --bg: #f5f7ff; --surface: #ffffff; --panel: #f3f4f7; --panel-2: #e8eaef; --work: #d9dbe2; --input: #ffffff; --menu: #ffffff;
+  --fg: #171a26; --fg2: #4b5163; --fg3: #7c8295; --chip: rgba(15,20,40,.06); --chip-hover: rgba(15,20,40,.1);
+  --hover: rgba(15,20,40,.05); --active: rgba(90,180,255,.22); --line: rgba(15,20,40,.1);
+  color-scheme: light;
+}
+
+html, body, #root { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+.font-head { font-family: var(--font-head); }
+.scroll-thin { scrollbar-width: thin; scrollbar-color: var(--chip-hover) transparent; }
+.no-scrollbar { scrollbar-width: none; } .no-scrollbar::-webkit-scrollbar { display: none; }
+.sora-text { background: linear-gradient(90deg, #5AB4FF, #8B7CFF 55%, #FF8FB1); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.sora-sky { background: linear-gradient(135deg, #5AB4FF 0%, #8B7CFF 55%, #FF8FB1 100%); }
+.checker { background-color: #fff; background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0; }
+.dark .checker { background-color: #3a3a3a; background-image: linear-gradient(45deg, #2b2b2b 25%, transparent 25%), linear-gradient(-45deg, #2b2b2b 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2b2b2b 75%), linear-gradient(-45deg, transparent 75%, #2b2b2b 75%); }
+
+/* Range sliders used across editor panels. */
+input[type=range].sl-range { -webkit-appearance: none; appearance: none; height: 18px; background: transparent; width: 100%; }
+input[type=range].sl-range::-webkit-slider-runnable-track { height: 3px; border-radius: 3px; background: var(--chip-hover); }
+input[type=range].sl-range::-moz-range-track { height: 3px; border-radius: 3px; background: var(--chip-hover); }
+input[type=range].sl-range::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--fg); margin-top: -4.5px; border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--line); }
+input[type=range].sl-range::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: var(--fg); border: 2px solid var(--panel); }
+input[type=range].sl-range:focus-visible { outline: 2px solid #5AB4FF; outline-offset: 2px; }
+input[type=number].sl-num::-webkit-inner-spin-button { opacity: .4; }
+
+@keyframes sl-pop { from { opacity: 0; transform: translateY(4px) scale(.98); } to { opacity: 1; transform: none; } }
+.sl-pop { animation: sl-pop .14s ease-out; }
+@keyframes sl-fade { from { opacity: 0; } to { opacity: 1; } }
+.sl-fade { animation: sl-fade .15s ease-out; }
