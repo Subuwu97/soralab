@@ -387,3 +387,19 @@ export function sortPhotos(list, by, desc) {
   });
   return out.map((x) => x[0]);
 }
+
+/** Full-frame q (crop mode) → oriented uv (0..1). */
+export function fullQToOriented(srcW, srcH, s, qx, qy) {
+  const [W, H] = orientedSize(srcW, srcH, s.orient);
+  const f = frameOf(srcW, srcH, s, { full: true });
+  const a = (s.crop.angle * Math.PI) / 180; const co = Math.cos(a); const si = Math.sin(a);
+  const dx = (qx - 0.5) * f.outW; const dy = (qy - 0.5) * f.outH;
+  return [(W / 2 + co * dx - si * dy) / W, (H / 2 + si * dx + co * dy) / H];
+}
+/** Crop rectangle given in full-frame q space → crop settings (keeps angle). */
+export function cropFromFullRect(srcW, srcH, s, r) {
+  const [W, H] = orientedSize(srcW, srcH, s.orient);
+  const f = frameOf(srcW, srcH, s, { full: true });
+  const [cx, cy] = fullQToOriented(srcW, srcH, s, r.x + r.w / 2, r.y + r.h / 2);
+  return { ...s.crop, cx, cy, w: (r.w * f.outW) / W, h: (r.h * f.outH) / H };
+}
