@@ -14,14 +14,15 @@ const common = (doc) => [
 
 export function exportConfig({ engine, getDoc, getTimeSel, docId, name }) {
   const doc = getDoc();
-  const serverNote = 'Encoded by the server at 48 kHz from a lossless mix made in your browser.';
+  const serverNote = 'Encoded by the server from a lossless mix made in your browser.';
+  const note48 = 'Encoded by the server from a lossless mix made in your browser. MP3 and AAC go up to 48 kHz.';
   return {
     formats: [
       { id: 'wav', label: 'WAV (uncompressed)', ext: 'wav', kind: 'audio', options: [{ key: 'bits', label: 'Bit depth', type: 'select', default: 24, choices: [[16, '16-bit (dithered)'], [24, '24-bit'], [32, '32-bit float']] }, ...common(doc)] },
       { id: 'flac', label: 'FLAC (lossless)', ext: 'flac', kind: 'audio', options: common(doc), note: serverNote },
-      { id: 'mp3', label: 'MP3 320 kbps', ext: 'mp3', kind: 'audio', options: common(doc), note: serverNote },
-      { id: 'm4a', label: 'AAC 256 kbps (M4A)', ext: 'm4a', kind: 'audio', options: common(doc), note: serverNote },
-      { id: 'opus', label: 'Opus 160 kbps (OGG)', ext: 'ogg', kind: 'audio', options: common(doc), note: serverNote },
+      { id: 'mp3', label: 'MP3 320 kbps', ext: 'mp3', kind: 'audio', options: common(doc), note: note48 },
+      { id: 'm4a', label: 'AAC 256 kbps (M4A)', ext: 'm4a', kind: 'audio', options: common(doc), note: note48 },
+      { id: 'opus', label: 'Opus 160 kbps (OGG)', ext: 'ogg', kind: 'audio', options: common(doc), note: 'Encoded by the server from a lossless mix made in your browser. Opus is always 48 kHz.' },
     ],
     render: async (fid, o, { onProgress }) => {
       const d = getDoc();
@@ -36,7 +37,7 @@ export function exportConfig({ engine, getDoc, getTimeSel, docId, name }) {
       if (fid === 'wav') return wav;
       onProgress?.(0, 'Uploading the mix…');
       const asset = await saveBlob(wav, `${name || 'Mixdown'}.wav`, { docId, isExport: false, onProgress: (p) => onProgress?.(p, 'Uploading the mix…') });
-      return { job: { kind: 'transcode', name, spec: { asset_id: asset.id, preset: fid } } };
+      return { job: { kind: 'transcode', name, spec: { asset_id: asset.id, preset: fid, output: { sample_rate: Number(o.sampleRate) } } } };
     },
   };
 }

@@ -159,10 +159,10 @@ export class Engine {
     if (this.loading.has(id)) return this.loading.get(id);
     const p = (async () => {
       const dec = new OfflineAudioContext(1, 1, this.sampleRate);
+      const r = await fetch(assetSrc(id), { credentials: 'same-origin' });
+      if (!r.ok) throw new Error(`Couldn’t load audio (${r.status})`);
       let buf;
       try {
-        const r = await fetch(assetSrc(id), { credentials: 'same-origin' });
-        if (!r.ok) throw new Error(`Couldn’t load audio (${r.status})`);
         buf = await dec.decodeAudioData(await r.arrayBuffer());
       } catch (e) {
         // The browser can't decode it (e.g. a codec Chromium lacks): have the server extract a WAV and use that.

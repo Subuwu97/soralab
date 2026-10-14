@@ -61,6 +61,7 @@ export default function AudioEditor({ id }) {
       if (!hasContent(data) && Array.isArray(imports) && imports.length) {
         const list = (await Promise.all(imports.map((a) => api.get(`/api/assets/${a}`).catch(() => null)))).filter((a) => a && ['audio', 'video'].includes(a.kind));
         const files = list.map(fileOf);
+        if (project.canEdit) attach(list);
         d = addFiles(d, files);
         files.forEach((f, i) => {
           if (!d.tracks[i] || d.tracks[i].clips.length) d = { ...d, tracks: [...d.tracks.slice(0, i), newTrack(d), ...d.tracks.slice(i)] };
@@ -95,6 +96,8 @@ export default function AudioEditor({ id }) {
   }, [doc]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ------------------------------------------------------------ actions
+  // Files picked from Files/Cloud belong to the person, not the project: link them so people it's shared with can play them.
+  const attach = (list) => Promise.all(list.filter((a) => a && !a.doc_id).map((a) => api.patch(`/api/assets/${a.id}`, { doc_id: id, keep: true }).catch(() => {})));
   const placeFile = (d, file, trackId, t) => {
     d = addFiles(d, [file]);
     let tid = trackId;
@@ -181,6 +184,7 @@ export default function AudioEditor({ id }) {
     importFiles: async () => {
       const assets = await pickAssets({ kinds: ['audio', 'video'], docId: id, title: 'Import audio' });
       if (!assets?.length) return;
+      attach(assets);
       const files = await Promise.all(assets.filter((a) => ['audio', 'video'].includes(a.kind)).map((a) => ensureDuration(fileOf(a))));
       edit(addFiles(docRef.current, files), files.length > 1 ? 'Import files' : 'Import file');
       setBinOpen(true);

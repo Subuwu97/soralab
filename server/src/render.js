@@ -82,16 +82,21 @@ async function videoEncode(o, prof, w, h, fps) {
   }
 }
 
+const mixRate = (o) => ([44100, 48000, 88200, 96000].includes(Number(o?.sample_rate)) ? Number(o.sample_rate) : 48000);
+
 function audioEncode(o) {
   const ac = o.audio_codec || (o.container === 'webm' || o.container === 'ogg' ? 'opus' : o.container === 'mov' && o.vcodec === 'prores' ? 'pcm' : 'aac');
   const br = `${Math.round(o.audio_bitrate || (ac === 'opus' ? 160 : 256))}k`;
+  // Sample rate: the mix runs at mixRate(o); Opus is always 48 kHz, and MP3 and AAC top out at 48 kHz.
+  const asked = mixRate(o);
+  const rate = asked === 48000 || ac === 'opus' ? [] : ['-ar', String(['mp3', 'aac'].includes(ac) ? Math.min(asked, 48000) : asked)];
   switch (ac) {
-    case 'aac': return ['-c:a', 'aac', '-b:a', br];
-    case 'mp3': return ['-c:a', 'libmp3lame', '-b:a', br];
+    case 'aac': return ['-c:a', 'aac', '-b:a', br, ...rate];
+    case 'mp3': return ['-c:a', 'libmp3lame', '-b:a', br, ...rate];
     case 'opus': return ['-c:a', 'libopus', '-b:a', br];
-    case 'flac': return ['-c:a', 'flac'];
-    case 'pcm': return ['-c:a', o.container === 'wav' ? 'pcm_s16le' : 'pcm_s24le'];
-    default: return ['-c:a', 'aac', '-b:a', br];
+    case 'flac': return ['-c:a', 'flac', ...rate];
+    case 'pcm': return ['-c:a', o.container === 'wav' ? 'pcm_s16le' : 'pcm_s24le', ...rate];
+    default: return ['-c:a', 'aac', '-b:a', br, ...rate];
   }
 }
 
@@ -345,7 +350,7 @@ export async function timelineArgs(spec, out, prof) {
       // The clip's own sound.
       if (!still && o.container !== 'gif' && isVideo && p.a.has_audio && !c.mute && !track.mute && num(c.volume, 1) > 0) {
         const aidx = idx !== null && !audioOnly ? idx : addInput(['-ss', w.srcIn.toFixed(3), '-t', (w.len * w.speed + 0.1).toFixed(3), '-i', p.file]);
-        audioLabels.push(audioChain(`[${aidx}:a]`, c, w, track, filters, audioLabels.length, 'audio_fade_'));
+        audioLabels.push(audioChain(`[${aidx}:a]`, c, w, track, filters, audioLabels.length, 'audio_fade_', mixRate(o)));
       }
     }
   }
@@ -357,14 +362,14 @@ export async function timelineArgs(spec, out, prof) {
       const p = assetPath(c.asset_id);
       if (!p || !['audio', 'video'].includes(p.a.kind) || p.a.has_audio === 0) continue;
       const idx = addInput(['-ss', w.srcIn.toFixed(3), '-t', (w.len * w.speed + 0.1).toFixed(3), '-i', p.file]);
-      audioLabels.push(audioChain(`[${idx}:a]`, c, w, track, filters, audioLabels.length, 'fade_'));
+      audioLabels.push(audioChain(`[${idx}:a]`, c, w, track, filters, audioLabels.length, 'fade_', mixRate(o)));
     }
   }
 
   const mv = clamp(num(spec.master_volume, 1), 0, 4);
   // Silence fills the gaps, so the sound always runs the full length of the export. (Stills and GIFs have no sound.)
-  if (still || o.container === 'gif') { /* no audio graph */ } else if (audioLabels.length) filters.push(`${audioLabels.map((l) => `[${l}]`).join('')}amix=inputs=${audioLabels.length}:normalize=0:dropout_transition=0,volume=${mv},apad,atrim=0:${D.toFixed(3)},aresample=48000[aout]`);
-  else filters.push(`anullsrc=r=48000:cl=stereo,atrim=0:${D.toFixed(3)}[aout]`);
+  if (still || o.container === 'gif') { /* no audio graph */ } else if (audioLabels.length) filters.push(`${audioLabels.map((l) => `[${l}]`).join('')}amix=inputs=${audioLabels.length}:normalize=0:dropout_transition=0,volume=${mv},apad,atrim=0:${D.toFixed(3)},aresample=${mixRate(o)}[aout]`);
+  else filters.push(`anullsrc=r=${mixRate(o)}:cl=stereo,atrim=0:${D.toFixed(3)}[aout]`);
 
   const args = ['-y', '-hide_banner', '-loglevel', 'error', '-stats', ...inputArgs(prof, { hwDecode: false }), ...inputs];
   if (audioOnly) {
@@ -388,7 +393,7 @@ export async function timelineArgs(spec, out, prof) {
   return { args, duration: D };
 }
 
-function audioChain(src, c, w, track, filters, n, fadeKey) {
+function audioChain(src, c, w, track, filters, n, fadeKey, rate = 48000) {
   const trackVol = clamp(num(track.volume, 1), 0, 8);
   const chain = ['asetpts=PTS-STARTPTS', ...atempo(w.speed)];
   // Volume keyframes multiply with the track volume; t here is time from the visible window's start.
@@ -400,7 +405,7 @@ function audioChain(src, c, w, track, filters, n, fadeKey) {
   // Crossfades: equal-power curves over the overlap.
   if (c._xin && w.cut < c._xin) chain.push(`afade=t=in:st=${Math.max(0, -w.cut).toFixed(3)}:d=${(c._xin - w.cut).toFixed(3)}:curve=qsin`);
   if (c._xout) chain.push(`afade=t=out:st=${Math.max(0, w.dur - c._xout - w.cut).toFixed(3)}:d=${c._xout.toFixed(3)}:curve=qsin`);
-  chain.push(`atrim=0:${w.len.toFixed(3)}`, 'aresample=48000', 'aformat=channel_layouts=stereo');
+  chain.push(`atrim=0:${w.len.toFixed(3)}`, `aresample=${rate}`, 'aformat=channel_layouts=stereo');
   for (const p of [panFilter(c.pan), panFilter(track.pan)]) if (p) chain.push(p);
   chain.push(`adelay=${Math.round(w.at * 1000)}:all=1`);
   filters.push(`${src}${chain.join(',')}[a${n}]`);

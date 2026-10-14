@@ -266,7 +266,7 @@ export default function Timeline({
       const major = Math.abs(t / step - Math.round(t / step)) < 1e-6;
       const xx = Math.round(X(t)) + 0.5;
       g.fillRect(xx, major ? H - 12 : H - 5, 1, major ? 12 : 5);
-      if (major) g.fillText(fmtRuler(Math.max(0, t), step), xx + 3, LOOP_H + 2 + MARK_H - 10);
+      if (major) g.fillText(fmtRuler(Math.max(0, t), step), xx + 3, LOOP_H + MARK_H + 1);
     }
     // markers
     for (const m of d.markers) {
