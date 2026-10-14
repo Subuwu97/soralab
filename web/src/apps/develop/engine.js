@@ -399,7 +399,8 @@ export class Renderer {
     this.uniforms(settings, { M: [1, 0, 0, 0, 1, 0], outW: w, outH: h }, [1 / w, 0, 0, 0, 1 / h, 0], { mode: 1, lutOn: true });
     this.w = sw; this.h = sh;
     const blurM = this.blurM; const blurL = this.blurL; const full = this.full;
-    this.full = tex; this.blurM = this.blurM || fbo; this.blurL = this.blurL || fbo;
+    // (No photo needed: colour-only mode never reads the blur textures, but they must not be the render target.)
+    this.full = tex; this.blurM = this.blurM || { tex: this.black }; this.blurL = this.blurL || { tex: this.black };
     this.bindTextures(false);
     this.full = full; this.blurM = blurM; this.blurL = blurL;
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.fb);
@@ -430,7 +431,7 @@ export { inv };
 export function toCube(data, n, title = 'Sora Hikari') {
   const lines = [`TITLE "${title.replace(/"/g, '')}"`, `LUT_3D_SIZE ${n}`, 'DOMAIN_MIN 0.0 0.0 0.0', 'DOMAIN_MAX 1.0 1.0 1.0', ''];
   for (let i = 0; i < data.length; i += 3) lines.push(`${data[i].toFixed(6)} ${data[i + 1].toFixed(6)} ${data[i + 2].toFixed(6)}`);
-  return lines.join('\n');
+  return `${lines.join('\n')}\n`;
 }
 /** Parses a .cube 3D LUT into RGBA bytes (red fastest, like the file). */
 export function parseCube(text) {
