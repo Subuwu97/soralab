@@ -57,10 +57,20 @@ function kinetic(comp) {
   const W = comp.width; const H = comp.height; const u = H / 1080;
   const words = [['MAKE', '#ffffff', 0], ['IT', '#ffd35c', 0.55], ['MOVE.', '#ff4f7b', 1.0], ['MOTION', '#7a5cff', 1.8], ['THAT', '#ffffff', 2.25], ['TALKS', '#5ee0c8', 2.7]];
   const layers = [];
+  // lay each row out from rough word widths (Montserrat Black is about 0.78 em per capital)
+  const sizeOf = (i) => (i % 3 === 2 ? 170 : 130) * u;
+  const widthOf = (i) => words[i][0].length * sizeOf(i) * 0.78;
+  const gap = 50 * u;
+  const xs = [];
+  for (const rowStart of [0, 3]) {
+    const total = [0, 1, 2].reduce((a, j) => a + widthOf(rowStart + j), 0) + gap * 2;
+    let x = W / 2 - total / 2;
+    for (let j = 0; j < 3; j++) { xs[rowStart + j] = x + widthOf(rowStart + j) / 2; x += widthOf(rowStart + j) + gap; }
+  }
   words.forEach(([w, col, t0], i) => {
     const row = i < 3 ? 0 : 1;
-    const x = W / 2 + (i % 3 - 1) * 360 * u; const y = H / 2 - 40 * u + row * 190 * u;
-    const l = newLayer('text', comp, { name: w, value: w, size: (i % 3 === 2 ? 170 : 130) * u, color: col, position: [x, y], weight: 900, font: 'Montserrat' });
+    const x = xs[i]; const y = H / 2 - 40 * u + row * 190 * u;
+    const l = newLayer('text', comp, { name: w, value: w, size: sizeOf(i), color: col, position: [x, y], weight: 900, font: 'Montserrat' });
     l.tr.scale = K([t0, [300, 300], OVERSHOOT], [t0 + 0.35, [100, 100]]);
     l.tr.opacity = K([t0, 0, 'linear'], [t0 + 0.12, 100], ...(row === 0 ? [[1.55, 100], [1.75, 0]] : []));
     l.tr.rotation = K([t0, i % 2 ? 12 : -12], [t0 + 0.4, 0]);
@@ -75,18 +85,18 @@ function kinetic(comp) {
 
 function subscribe(comp) {
   const W = comp.width; const H = comp.height; const u = H / 1080; const c = [W / 2, H / 2];
-  const btn = newLayer('shape', comp, { name: 'Button', fill: '#ff2d55', position: c, shapes: [newShape('rect', { size: [560 * u, 140 * u], round: 70 * u })] });
+  const btn = newLayer('shape', comp, { name: 'Button', fill: '#ff2d55', position: c, shapes: [newShape('rect', { size: [620 * u, 140 * u], round: 70 * u })] });
   btn.tr.scale = K([0, [0, 0], OVERSHOOT], [0.5, [100, 100]], [1.9, [100, 100]], [2.0, [92, 92]], [2.15, [100, 100]]);
   btn.shape.fill.color = K([0, '#ff2d55', 'hold'], [2.0, '#3a3d47']);
   btn.effects.push(newEffect('dropShadow', comp));
-  const label = newLayer('text', comp, { name: 'SUBSCRIBE', value: 'SUBSCRIBE', size: 58 * u, position: [c[0] + 40 * u, c[1] + 20 * u], weight: 800 });
+  const label = newLayer('text', comp, { name: 'SUBSCRIBE', value: 'SUBSCRIBE', size: 52 * u, position: [c[0] + 45 * u, c[1] + 18 * u], weight: 800 });
   label.text.tracking = { v: 80 };
   label.tr.opacity = K([0.25, 0], [0.45, 100], [1.98, 100, 'hold'], [2.0, 0]);
-  const done = newLayer('text', comp, { name: 'SUBSCRIBED', value: 'SUBSCRIBED', size: 58 * u, position: [c[0] + 40 * u, c[1] + 20 * u], weight: 800, color: '#c8ccd8' });
+  const done = newLayer('text', comp, { name: 'SUBSCRIBED', value: 'SUBSCRIBED', size: 52 * u, position: [c[0] + 45 * u, c[1] + 18 * u], weight: 800, color: '#c8ccd8' });
   done.text.tracking = { v: 80 };
   done.tr.opacity = K([1.98, 0, 'hold'], [2.0, 100]);
   // A bell drawn with the pen: body + clapper. It rings (expression) once you're subscribed.
-  const bell = newLayer('shape', comp, { name: 'Bell', fill: '#ffffff', position: [c[0] - 200 * u, c[1]], shapes: [
+  const bell = newLayer('shape', comp, { name: 'Bell', fill: '#ffffff', position: [c[0] - 235 * u, c[1]], shapes: [
     newShape('path', { closed: true, nodes: [
       { p: [-30 * u, 22 * u] }, { p: [-24 * u, -12 * u], i: [0, 12 * u], o: [0, -26 * u] }, { p: [0, -36 * u], i: [-16 * u, 0], o: [16 * u, 0] },
       { p: [24 * u, -12 * u], i: [0, -26 * u], o: [0, 12 * u] }, { p: [30 * u, 22 * u] },
@@ -94,7 +104,7 @@ function subscribe(comp) {
     newShape('ellipse', { pos: [0, 32 * u], size: [18 * u, 18 * u] }),
   ] });
   bell.tr.anchor = { v: [0, -36 * u] };
-  bell.tr.position = { v: [c[0] - 200 * u, c[1] - 36 * u] };
+  bell.tr.position = { v: [c[0] - 235 * u, c[1] - 36 * u] };
   bell.tr.rotation = { v: 0, x: 'time > 2.1 ? Math.sin((time - 2.1) * 30) * 25 * Math.max(0, 1 - (time - 2.1) * 1.2) : 0' };
   bell.tr.opacity = K([0.3, 0], [0.5, 100]);
   // The click: a cursor arrow glides in and taps.

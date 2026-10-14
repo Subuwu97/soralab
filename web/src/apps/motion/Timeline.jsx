@@ -99,6 +99,7 @@ export default function Timeline({
     const x0 = e.clientX; let last = 0;
     const merge = `keys-${Date.now()}`;
     const keys = current.map(parseKeyId);
+    const orig = new Map(comp.layers.map((l) => [l.id, l])); // offsets always apply to where the keys started
     const mv = (ev) => {
       const dt = snapT((ev.clientX - x0) / pps, comp.fps);
       if (dt === last) return;
@@ -107,12 +108,12 @@ export default function Timeline({
         const layers = c.layers.map((l) => {
           const mine = keys.filter((k) => k.lid === l.id);
           if (!mine.length) return l;
+          const base = orig.get(l.id) || l;
           let out = l;
           for (const path of [...new Set(mine.map((k) => k.path))]) {
             const ts = mine.filter((k) => k.path === path).map((k) => k.t);
             out = updatePath(out, path, (p) => {
-              const orig = getPath(l, path);
-              const moved = orig.k.map((k) => (ts.some((t) => Math.abs(t - k.t) < 1e-4) ? { ...k, t: Math.max(0, +(k.t + dt).toFixed(5)) } : k));
+              const moved = getPath(base, path).k.map((k) => (ts.some((t) => Math.abs(t - k.t) < 1e-4) ? { ...k, t: Math.max(0, +(k.t + dt).toFixed(5)) } : k));
               // a moved key replaces an unmoved key at the same time
               const kept = moved.filter((k, i) => moved.findIndex((o) => Math.abs(o.t - k.t) < 1e-4) === i || ts.some((t) => Math.abs(t + dt - k.t) < 1e-4));
               return { ...p, k: kept.sort((a, b) => a.t - b.t) };
