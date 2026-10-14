@@ -148,7 +148,8 @@ export async function formFields(doc) {
     const list = [];
     for (const a of anns) {
       if (a.subtype !== 'Widget' || !a.fieldName || a.hidden) continue;
-      const [x1, y1, x2, y2] = vp.convertToViewportRectangle(a.rect);
+      const vt = vp.transform;
+      const [x1, y1] = apply(vt, a.rect[0], a.rect[1]); const [x2, y2] = apply(vt, a.rect[2], a.rect[3]);
       const rect = [Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1)];
       let type = null;
       if (a.fieldType === 'Tx') type = 'text';
@@ -179,7 +180,7 @@ export async function renderEntry(e, docs, scale, { canvas, annotations = true, 
   const page = await info.doc.pdf.getPage(e.i + 1);
   const vp = page.getViewport({ scale, rotation: (page.rotate + rot) % 360 });
   c.width = Math.max(1, Math.round(vp.width)); c.height = Math.max(1, Math.round(vp.height));
-  const task = page.render({ canvas: c, canvasContext: c.getContext('2d'), viewport: vp, annotationMode: annotations ? pdfjs.AnnotationMode.ENABLE : pdfjs.AnnotationMode.DISABLE });
+  const task = page.render({ canvas: c, canvasContext: c.getContext('2d'), viewport: vp, annotationMode: annotations === 'forms' ? pdfjs.AnnotationMode.ENABLE_FORMS : annotations ? pdfjs.AnnotationMode.ENABLE : pdfjs.AnnotationMode.DISABLE });
   signal?.addEventListener('abort', () => task.cancel());
   await task.promise;
   return c;

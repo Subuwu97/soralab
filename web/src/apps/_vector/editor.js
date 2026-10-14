@@ -390,7 +390,8 @@ export function useVectorEditor(project, app, { defaultStyle } = {}) {
       const siblings = f.parent ? findNode(dd.children, f.parent.id).children : dd.children;
       const idx = siblings.findIndex((n) => n.id === f.node.id);
       const before = siblings.slice(0, idx).filter((n) => sel.includes(n.id)).length;
-      return { ...dd, symbols: [...dd.symbols, sym], children: insertInto(removeIds(dd.children, sel), f.parent?.id || null, [inst], idx - before) };
+      // Prototype interactions on the replaced objects now start from the instance.
+      return { ...dd, symbols: [...dd.symbols, sym], children: insertInto(removeIds(dd.children, sel), f.parent?.id || null, [inst], idx - before), interactions: (dd.interactions || []).map((i) => (sel.includes(i.from) ? { ...i, from: inst.id } : i)) };
     }, app === 'proto' ? 'Make Component' : 'New Symbol');
     setSel([inst.id]);
     return sym;

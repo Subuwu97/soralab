@@ -172,7 +172,8 @@ function PageView({ ed, idx, e, info, zoom, visible, elRef }) {
     const t = setTimeout(async () => {
       try {
         const dpr = Math.min(2, window.devicePixelRatio || 1);
-        const tmp = await renderEntry(e, ed.docs, zoom * dpr, { signal: ac.signal, annotations: true });
+        // form widgets are drawn as live fields on top, so leave them out of the image
+        const tmp = await renderEntry(e, ed.docs, zoom * dpr, { signal: ac.signal, annotations: e.src === 'source' && ed.fields[e.i]?.length ? 'forms' : true });
         if (ac.signal.aborted || !canvas.current) return;
         const c = canvas.current;
         c.width = tmp.width; c.height = tmp.height;
@@ -181,7 +182,7 @@ function PageView({ ed, idx, e, info, zoom, visible, elRef }) {
       } catch (err) { if (err?.name !== 'RenderingCancelledException') console.warn(err); }
     }, rendered ? 120 : 0);
     return () => { clearTimeout(t); ac.abort(); };
-  }, [visible, zoom, rot, e.src, e.i, ed.docs]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [visible, zoom, rot, e.src, e.i, ed.docs, ed.fields]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the selectable text layer
   useEffect(() => {

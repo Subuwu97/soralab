@@ -76,13 +76,14 @@ function ProtoEditor({ id }) {
   };
   /** Turns the selection into a repeat grid (3 copies across to start; change rows/columns in Properties). */
   const makeRepeatGrid = () => {
-    if (!ed.selNodes.length || ed.readOnly) return;
+    if (!ed.selNodes.length || ed.readOnly || ed.scope) return;
     const d = ed.get();
     const b = boundsOf(ed.selNodes, d);
     const cell = { w: b.w, h: b.h, children: ed.selNodes.map((x) => transformNode(cloneNode(x), translate(-b.x, -b.y))) };
     const rg = { id: uid(), type: 'repeat', name: 'Repeat grid', t: translate(b.x, b.y), cell, cols: 3, rows: 1, gx: 20, gy: 20, opacity: 1, blend: 'normal', effects: [], texts: {} };
     const f = find(ed.root, ed.sel[ed.sel.length - 1]);
-    ed.change((r) => insertInto(removeIds(r, ed.sel), f.parent?.id || null, [rg]), 'Repeat Grid');
+    const ids = ed.sel;
+    ed.changeDoc((dd) => ({ ...dd, children: insertInto(removeIds(dd.children, ids), f.parent?.id || null, [rg]), interactions: (dd.interactions || []).map((i) => (ids.includes(i.from) ? { ...i, from: rg.id } : i)) }), 'Repeat Grid');
     ed.setSel([rg.id]);
   };
   const ungroupGrid = (rg) => {
