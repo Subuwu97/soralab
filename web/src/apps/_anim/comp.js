@@ -9,7 +9,7 @@ import { valueAt } from './keyframes.js';
 import { seedOf } from './expr.js';
 import { rectPoly, ellipsePoly, starPoly, penPoly, trimPolys, tracePolys, trs, mul, I, apply, bbox } from './geom.js';
 import { applyEffects, lumaToAlpha } from './effects.js';
-import { getImage, getVideo, seekVideo, nudgeVideo, videoReady, loadImageAsset } from './media.js';
+import { getImage, getVideo, seekVideo, nudgeVideo, syncVideo, videoReady, loadImageAsset } from './media.js';
 import { ensureFont } from '../../lib/fonts.js';
 import { colorArr } from './keyframes.js';
 
@@ -290,8 +290,8 @@ function layerBuffer(project, comp, layer, t, s, depth, opts) {
     case 'text': drawText(ctx, layer, t, comp); break;
     case 'image': { const img = getImage(layer.asset); if (img) ctx.drawImage(img, 0, 0, layer.w, layer.h); break; }
     case 'video': {
-      const v = getVideo(layer.id, layer.asset);
-      if (!opts.wait) nudgeVideo(v, t - layer.start);
+      const v = getVideo((opts.keyPrefix || '') + layer.id, layer.asset);
+      if (!opts.wait) syncVideo(v, t - layer.start, !!opts.playing);
       if (videoReady(v)) ctx.drawImage(v, 0, 0, layer.w, layer.h);
       break;
     }
@@ -384,7 +384,8 @@ function renderInto(project, comp, t, ctx, s, depth, opts) {
 
 /**
  * Draws the composition at time t into ctx. The canvas should be comp.width × comp.height times opts.scale.
- * opts: { scale = 1, transparent, hide: Set of layer ids, wait (export: videos were seeked by prepareFrame), noMB }
+ * opts: { scale = 1, transparent, hide: Set of layer ids, wait (export: videos were seeked by prepareFrame), keyPrefix (export uses
+ *        its own video elements so the viewer can't seek them meanwhile), noMB }
  */
 export function renderFrame(project, comp, t, ctx, opts = {}) {
   const s = opts.scale ?? ctx.canvas.width / comp.width;
@@ -392,21 +393,21 @@ export function renderFrame(project, comp, t, ctx, opts = {}) {
 }
 
 /** Everything a frame needs: fonts, images, and video frames at their media times (recurses into precomps). */
-export function collectMedia(project, comp, t, out = [], depth = 0) {
+export function collectMedia(project, comp, t, out = [], depth = 0, prefix = '') {
   for (const l of comp.layers) {
     if (l.enabled === false && !comp.layers.some((x) => x.matte?.layer === l.id)) continue;
     if (!isActive(l, t)) continue;
     if (l.type === 'text') out.push({ kind: 'font', family: l.text.font || 'Inter', weight: l.text.weight || 400, italic: l.text.italic });
     else if (l.type === 'image') out.push({ kind: 'image', asset: l.asset });
-    else if (l.type === 'video') out.push({ kind: 'video', key: l.id, asset: l.asset, time: t - l.start });
-    else if (l.type === 'precomp' && depth < 8) { const sub = compById(project, l.comp); if (sub) collectMedia(project, sub, t - l.start, out, depth + 1); }
+    else if (l.type === 'video') out.push({ kind: 'video', key: prefix + l.id, asset: l.asset, time: t - l.start });
+    else if (l.type === 'precomp' && depth < 8) { const sub = compById(project, l.comp); if (sub) collectMedia(project, sub, t - l.start, out, depth + 1, prefix); }
   }
   return out;
 }
 
 /** Gets a frame ready to draw. wait: await every video seek (export); otherwise just ask and redraw later (preview). */
-export async function prepareFrame(project, comp, t, { wait = false } = {}) {
-  const list = collectMedia(project, comp, t);
+export async function prepareFrame(project, comp, t, { wait = false, keyPrefix = '' } = {}) {
+  const list = collectMedia(project, comp, t, [], 0, keyPrefix);
   const jobs = [];
   for (const m of list) {
     if (m.kind === 'font') jobs.push(ensureFont(m.family, m.weight, m.italic ? 'italic' : 'normal'));

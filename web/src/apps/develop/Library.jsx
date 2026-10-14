@@ -64,7 +64,7 @@ export const Cell = memo(function Cell({ photo, size, selected, current, readOnl
 export function FilterBar({ filter, setFilter, sort, setSort, count, total, thumbSize, setThumbSize }) {
   const f = filter;
   return (
-    <div className="flex items-center gap-2 px-3 h-10 border-b border-line bg-panel text-[13px] overflow-x-auto no-scrollbar shrink-0">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5 border-b border-line bg-panel text-[13px] shrink-0">
       <div className="relative">
         <Icon name="search" size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-fg3" />
         <TextInput value={f.text} onChange={(e) => setFilter({ ...f, text: e.target.value })} placeholder="Name or keyword" className="!h-7 !w-40 !pl-7 text-[13px]" />

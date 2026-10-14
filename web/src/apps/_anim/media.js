@@ -63,6 +63,14 @@ export function nudgeVideo(v, t) {
   if (v.readyState >= 1 && !v.seeking && Math.abs(v.currentTime - target) > 0.0005) v.currentTime = Math.min(target, (v.duration || target + 1) - 0.001);
 }
 export const videoReady = (v) => v && v.readyState >= 2;
+/** Preview playback: let the element play natively and only re-seek when it drifts, so frames keep coming. */
+export function syncVideo(v, t, playing, rate = 1) {
+  const dur = v.duration || Infinity;
+  if (!playing || t < 0 || t >= dur) { if (!v.paused) v.pause(); nudgeVideo(v, t); return; }
+  if (v.playbackRate !== rate) v.playbackRate = rate;
+  if (Math.abs(v.currentTime - t) > 0.25 && !v.seeking) v.currentTime = t;
+  if (v.paused) v.play().catch(() => {});
+}
 
 let ac = null;
 const audioCtx = () => (ac ||= new (window.AudioContext || window.webkitAudioContext)());
@@ -117,3 +125,6 @@ export function playBuffer(buffer, offset) {
   try { src.start(0, Math.max(0, Math.min(offset, buffer.duration))); } catch { return () => {}; }
   return () => { try { src.stop(); } catch { /* already stopped */ } };
 }
+
+/** Stops every preview video (when playback stops). */
+export function pauseAllVideos() { for (const v of videos.values()) if (!v.paused) v.pause(); }

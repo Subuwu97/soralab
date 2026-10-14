@@ -12,7 +12,7 @@ import { useHistory } from '../../lib/history.js';
 import { useShortcuts, keyLabel } from '../../lib/shortcuts.js';
 import { saveBlob } from '../../lib/api.js';
 import { renderFrame, prepareFrame, compById, audioClips, worldMatrix } from '../_anim/comp.js';
-import { mixAudio, playBuffer } from '../_anim/media.js';
+import { mixAudio, playBuffer, pauseAllVideos } from '../_anim/media.js';
 import { exportVideo, exportGif, exportPng, exportPngSequence, videoSupport } from '../_anim/export.js';
 import { EASE_PRESETS, isAnimated, keyedValue } from '../_anim/keyframes.js';
 import { invert, apply } from '../_anim/geom.js';
@@ -95,7 +95,7 @@ export default function MotionEditor({ id }) {
     if (audioCache.current.key !== key) audioCache.current = { key, buf: clips.length ? await mixAudio(clips, comp.duration) : null };
     return audioCache.current.buf;
   }, [doc, comp]);
-  const stop = useCallback(() => { if (playRef.current) { cancelAnimationFrame(playRef.current.raf); playRef.current.stopAudio(); playRef.current = null; } setPlaying(false); }, []);
+  const stop = useCallback(() => { if (playRef.current) { cancelAnimationFrame(playRef.current.raf); playRef.current.stopAudio(); playRef.current = null; } pauseAllVideos(); setPlaying(false); }, []);
   const play = useCallback(async () => {
     if (!comp) return;
     const work = comp.work || [0, comp.duration];
@@ -340,7 +340,7 @@ export default function MotionEditor({ id }) {
   const newSolid = () => addLayer(newLayer('solid', comp, { name: `Solid ${comp.layers.filter((l) => l.type === 'solid').length + 1}`, color: newFill }));
 
   // ---------------------------------------------------------------- export
-  const drawAt = useCallback((d, c) => async (ctx, t) => { await prepareFrame(d, c, t, { wait: true }); renderFrame(d, c, t, ctx, { scale: ctx.canvas.width / c.width, wait: true }); }, []);
+  const drawAt = useCallback((d, c) => async (ctx, t) => { await prepareFrame(d, c, t, { wait: true, keyPrefix: 'export:' }); renderFrame(d, c, t, ctx, { scale: ctx.canvas.width / c.width, wait: true, keyPrefix: 'export:' }); }, []);
   const [mp4Note, setMp4Note] = useState('');
   useEffect(() => { videoSupport().then((s) => setMp4Note(s.h264 ? 'H.264 + AAC where supported.' : 'This browser has no H.264 encoder, so the MP4 uses VP9 video (plays in browsers, VLC and ffmpeg). Pick WebM for the widest web support.')); }, []);
   const range = (c, opt) => (opt === 'work' ? c.work || [0, c.duration] : [0, c.duration]);
@@ -388,7 +388,7 @@ export default function MotionEditor({ id }) {
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(c.width * s); canvas.height = Math.round(c.height * s);
     const t = Math.min(time, c.duration - 1 / c.fps);
-    try { await prepareFrame(d, c, t, { wait: true }); renderFrame(d, c, t, canvas.getContext('2d'), { scale: s, wait: true }); } catch { /* thumbnail is optional */ }
+    try { await prepareFrame(d, c, t, { wait: true, keyPrefix: 'thumb:' }); renderFrame(d, c, t, canvas.getContext('2d'), { scale: s, wait: true, keyPrefix: 'thumb:' }); } catch { /* thumbnail is optional */ }
     return { data: d, thumb: canvas, width: main.width, height: main.height, duration: main.duration, meta: { fps: main.fps, duration: main.duration } };
   }, [h, comp?.id, time]); // eslint-disable-line react-hooks/exhaustive-deps
 

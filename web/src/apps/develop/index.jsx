@@ -98,6 +98,8 @@ export default function DevelopEditor({ id }) {
   const targets = useMemo(() => (!photo ? [] : sel.has(photo.id) ? [...sel].filter((x) => doc.photos.some((p) => p.id === x)) : [photo.id]), [sel, photo, doc]);
 
   // Leaving a photo ends tools that belong to it.
+  // A brush that suits the photo's size (in source pixels).
+  useEffect(() => { if (photo?.width) setBrush((b) => ({ ...b, size: Math.max(4, Math.round(Math.max(photo.width, photo.height) * 0.04)) })); }, [cur, !!photo?.width]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setMaskSel(null); setHoverPreview(null); if (tool && tool !== 'crop') setTool(MASK_TOOLS.includes(tool) ? 'mask' : null); }, [cur]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------------------------------------------- editing

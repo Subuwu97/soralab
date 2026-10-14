@@ -44,14 +44,14 @@ export default function Viewer({
     if (!c) return;
     if (c.width !== W) c.width = W;
     if (c.height !== H) c.height = H;
-    prepareFrame(project, comp, time);
+    if (!playing) prepareFrame(project, comp, time);
     const fonts = collectMedia(project, comp, time).filter((m) => m.kind === 'font' && !document.fonts.check(`${m.weight} 12px "${m.family}"`));
     if (fonts.length && !fontWait.current) {
       fontWait.current = true;
       Promise.all(fonts.map((f) => ensureFont(f.family, f.weight, f.italic ? 'italic' : 'normal'))).then(() => { fontWait.current = false; setTick((n) => n + 1); });
     }
-    renderFrame(project, comp, time, c.getContext('2d'), { scale: rs });
-  }, [project, comp, time, W, H, rs, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+    renderFrame(project, comp, time, c.getContext('2d'), { scale: rs, playing });
+  }, [project, comp, time, W, H, rs, tick, playing]); // eslint-disable-line react-hooks/exhaustive-deps
   if (renderRef) renderRef.current = canvas.current;
 
   const toComp = useCallback((e) => {
