@@ -289,7 +289,7 @@ export default function Libraries() {
   const [dropOn, setDropOn] = useState(null); // { lib } or { item, after }
   const [filter, setFilter] = useState('');
   const currentId = params.get('lib') || stored;
-  const lib = libraries.find((l) => l.id === currentId) || libraries[0];
+  const lib = libraries.find((l) => l.id === currentId) || libraries.find((l) => l.items.length) || libraries[0];
 
   useEffect(() => { document.title = 'Libraries — SoraLab'; reloadLibraries().then(() => setLoaded(true)); }, [reloadLibraries]);
   const choose = (id) => { setStored(id); setParams((p) => { const n = new URLSearchParams(p); n.set('lib', id); return n; }, { replace: true }); };
