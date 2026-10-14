@@ -49,13 +49,29 @@ export function loadDoc(req, id, need = 'viewer') {
 }
 
 const assetById = db.prepare('SELECT * FROM assets WHERE id = ?');
+const refDocs = db.prepare('SELECT d.* FROM doc_refs r JOIN docs d ON d.id = r.doc_id WHERE r.asset_id = ? AND d.trashed_at IS NULL');
 /** An asset the person owns, or one used by a project they can open. */
 export function loadAsset(req, id, { write = false } = {}) {
   const a = assetById.get(String(id));
   if (!a) fail(404, 'not_found', 'File not found.');
   if (a.owner === req.user.id) return a;
   if (!write && a.doc_id && roleFor(req.user, docById.get(a.doc_id))) return a;
+  if (!write && refDocs.all(a.id).some((d) => roleFor(req.user, d))) return a;
   fail(404, 'not_found', 'File not found.');
+}
+
+const ID_RE = /"([A-Za-z0-9]{12})"/g;
+/** Records which of the owner's files a project's contents mention (saved as JSON text), replacing the previous list. */
+export function updateRefs(doc, body) {
+  if (body.length > 64 * 1024 ** 2) return;
+  const text = body.toString('utf8');
+  const ids = [...new Set(Array.from(text.matchAll(ID_RE), (m) => m[1]))];
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM doc_refs WHERE doc_id = ?').run(doc.id);
+    const add = db.prepare('INSERT OR IGNORE INTO doc_refs (doc_id, asset_id) SELECT ?, id FROM assets WHERE id = ? AND owner = ? AND (doc_id IS NULL OR doc_id != ?)');
+    for (const id of ids) add.run(doc.id, id, doc.owner, doc.id);
+  });
+  tx();
 }
 
 // ---------------------------------------------------------------- storage

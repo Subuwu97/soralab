@@ -5,7 +5,7 @@ import path from 'node:path';
 import { config } from '../config.js';
 import { db, newId, now, json } from '../db.js';
 import { requireUser } from '../auth.js';
-import { h, fail, clean, loadDoc, docDir, roleFor, checkQuota, userOut } from './util.js';
+import { h, fail, clean, loadDoc, docDir, roleFor, checkQuota, userOut, updateRefs } from './util.js';
 import { notifier } from '../notify.js';
 import { viaSecure } from '../suite-images.js';
 
@@ -68,6 +68,7 @@ docs.post('/docs', express.json({ limit: `${config.maxDocMb}mb` }), (req, res) =
   const start = [b.meta?.source, ...(Array.isArray(b.meta?.import) ? b.meta.import : [])].filter((x) => typeof x === 'string').slice(0, 200);
   const attach = db.prepare("UPDATE assets SET doc_id = ?, source = CASE WHEN source LIKE 'keep%' THEN source ELSE 'keep:' || COALESCE(source,'') END WHERE id = ? AND owner = ? AND doc_id IS NULL");
   for (const a of start) attach.run(id, a, req.user.id);
+  updateRefs({ id, owner: req.user.id }, body);
   res.status(201).json(docOut(db.prepare('SELECT * FROM docs WHERE id = ?').get(id), req.user));
 });
 
@@ -101,6 +102,7 @@ docs.put('/docs/:id/data', express.raw({ type: () => true, limit: `${config.maxD
   const last = db.prepare('SELECT created_at FROM doc_versions WHERE doc_id = ? ORDER BY created_at DESC LIMIT 1').get(doc.id);
   if (fs.existsSync(file) && doc.size > 2 && (!last || now() - last.created_at > AUTOSAVE_VERSION_EVERY)) snapshot(doc, null, req.user.id);
   writeAtomic(file, body);
+  updateRefs(doc, body);
   const d = dims(req.query);
   const meta = req.query.meta ? JSON.stringify(json(String(req.query.meta))).slice(0, 8000) : null;
   db.prepare(`UPDATE docs SET size = ?, rev = rev + 1, mime = ?, updated_at = ?, width = COALESCE(?, width), height = COALESCE(?, height),
@@ -161,6 +163,7 @@ docs.post('/docs/:id/duplicate', express.json(), (req, res) => {
   db.prepare(`INSERT INTO docs (id, owner, app, name, mime, size, rev, width, height, duration, pages, has_thumb, meta, created_at, updated_at, opened_at)
     VALUES (?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?)`).run(id, req.user.id, doc.app, clean(req.body?.name, 200) || `${doc.name} copy`, doc.mime, doc.size,
     doc.width, doc.height, doc.duration, doc.pages, doc.has_thumb, doc.meta, t, t, t);
+  if (doc.owner === req.user.id) updateRefs({ id, owner: req.user.id }, fs.readFileSync(path.join(docDir(id), 'data')));
   // Assets the project uses stay readable by the copy: link them (they're owned by the original owner).
   if (doc.owner !== req.user.id) {
     for (const a of db.prepare('SELECT * FROM assets WHERE doc_id = ?').all(doc.id)) {
@@ -233,6 +236,7 @@ docs.post('/docs/:id/versions/:vid/restore', (req, res) => {
   if (!v) fail(404, 'not_found', 'Version not found.');
   snapshot(doc, null, req.user.id);
   fs.copyFileSync(path.join(docDir(doc.id), 'versions', v.id), path.join(docDir(doc.id), 'data'));
+  updateRefs(doc, fs.readFileSync(path.join(docDir(doc.id), 'data')));
   db.prepare('UPDATE docs SET size = ?, rev = rev + 1, updated_at = ? WHERE id = ?').run(v.size, now(), doc.id);
   res.json(docOut(db.prepare('SELECT * FROM docs WHERE id = ?').get(doc.id), req.user));
 });
@@ -321,3 +325,10 @@ docs.delete('/docs/:id/comments/:cid', (req, res) => {
   db.prepare('DELETE FROM doc_comments WHERE id = ? OR parent_id = ?').run(c.id, c.id);
   res.json({ ok: true });
 });
+
+// Projects saved before file references were recorded: fill them in once.
+if (!db.prepare('SELECT 1 FROM doc_refs LIMIT 1').get()) {
+  for (const d of db.prepare('SELECT id, owner FROM docs').all()) {
+    try { updateRefs(d, fs.readFileSync(path.join(docDir(d.id), 'data'))); } catch { /* no contents */ }
+  }
+}

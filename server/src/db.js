@@ -153,6 +153,15 @@ CREATE TABLE IF NOT EXISTS jobs (
   finished_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS jobs_owner ON jobs(owner, created_at);
+
+-- Files a project uses that live elsewhere (Files, another project): found in its contents when it's saved, so people the
+-- project is shared with can open them too.
+CREATE TABLE IF NOT EXISTS doc_refs (
+  doc_id   TEXT NOT NULL REFERENCES docs(id) ON DELETE CASCADE,
+  asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+  PRIMARY KEY (doc_id, asset_id)
+);
+CREATE INDEX IF NOT EXISTS doc_refs_asset ON doc_refs(asset_id);
 `);
 
 export const now = () => Date.now();

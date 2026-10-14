@@ -387,7 +387,11 @@ export function Modal({ title, onClose, children, footer, width = 480, className
     window.addEventListener('keydown', key);
     const prev = document.activeElement;
     ref.current?.querySelector('input,textarea,select,button[data-autofocus]')?.focus();
-    return () => { window.removeEventListener('keydown', key); prev?.focus?.(); };
+    return () => {
+      window.removeEventListener('keydown', key);
+      // Restore focus after the key that closed the dialog is done, so Enter doesn't also press the button that opened it.
+      setTimeout(() => { if (prev?.isConnected && (!document.activeElement || document.activeElement === document.body)) prev.focus?.(); }, 0);
+    };
   }, [onClose]);
   return createPortal(
     <div className="fixed inset-0 z-[900] grid place-items-center p-4 bg-black/55 backdrop-blur-[2px] sl-fade" onPointerDown={(e) => { if (closeOnBackdrop && e.target === e.currentTarget) onClose?.(); }}>
@@ -428,7 +432,7 @@ function DialogBox({ d }) {
       {d.message && <p className="text-sm text-fg2 whitespace-pre-line">{d.message}</p>}
       {d.kind === 'prompt' && (
         <Field label={d.label} className={d.message ? 'mt-3' : ''}>
-          <TextInput value={v} placeholder={d.placeholder} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && (String(v).trim() || d.allowEmpty)) done(v); }}
+          <TextInput value={v} placeholder={d.placeholder} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && (String(v).trim() || d.allowEmpty)) { e.preventDefault(); done(v); } }}
             onFocus={(e) => e.target.select()} />
         </Field>
       )}
