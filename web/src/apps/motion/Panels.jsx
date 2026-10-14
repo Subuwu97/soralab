@@ -41,7 +41,7 @@ export function PropEditor({ layer, path, def, time, editLayer, canEdit, endMerg
   return (
     <div className="flex items-start gap-2">
       <div className="pt-0.5">{sw}</div>
-      <Slider className="flex-1" label={def.label} value={+Number(v).toFixed(2)} min={min} max={max} step={def.step || (max - min > 20 ? 1 : 0.1)} onChange={set} onCommit={endMerge} unit={def.type === 'percent' ? '%' : undefined} disabled={!canEdit} />
+      <Slider className="flex-1" label={def.label} value={+Number(v).toFixed(2)} min={min} max={max} step={def.step || (max - min > 20 ? 1 : 0.1)} onChange={set} onCommit={endMerge} disabled={!canEdit} />
     </div>
   );
 }
@@ -258,7 +258,7 @@ export function LayerPanel({ project, comp, layer, time, editLayer, canEdit, end
         <div className="flex items-center gap-2 mb-2">
           <span className="text-xs text-fg2">Blend</span>
           <Select small value={layer.blend || 'normal'} onChange={(v) => set({ blend: v }, 'Blend mode')} options={BLEND_MODES.map(([v, l]) => ({ value: v, label: l }))} disabled={!canEdit} />
-          <Toggle className="ml-auto" label="Motion blur" checked={!!layer.motionBlur} disabled={!canEdit} onChange={(v) => set({ motionBlur: v }, 'Motion blur')} />
+          <Toggle className="ml-auto whitespace-nowrap" label="Motion blur" checked={!!layer.motionBlur} disabled={!canEdit} onChange={(v) => set({ motionBlur: v }, 'Motion blur')} />
         </div>
         {layer.type === 'solid' && <>{pe('color', { label: 'Colour', type: 'color' })}
           <div className="flex items-center gap-2 text-xs text-fg2 mt-1">Size <NumberInput value={layer.w} min={1} max={16384} width={60} onChange={(v) => set({ w: v }, 'Solid size')} disabled={!canEdit} />×<NumberInput value={layer.h} min={1} max={16384} width={60} onChange={(v) => set({ h: v }, 'Solid size')} disabled={!canEdit} /></div></>}

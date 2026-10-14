@@ -411,12 +411,12 @@ export default function MotionEditor({ id }) {
     'mod+c': copy, 'mod+v': ifEdit(paste), 'mod+x': ifEdit(() => { copy(); deleteSelection(); }),
     'mod+a': () => setSel(comp.layers.map((l) => l.id)), 'shift+mod+a': () => { setSel([]); setSelKeys([]); },
     f9: ifEdit(() => easeSelected('easy')), 'shift+f9': ifEdit(() => easeSelected('in')), 'shift+mod+f9': ifEdit(() => easeSelected('out')), 'alt+mod+h': ifEdit(() => easeSelected('hold')),
-    'mod+y': ifEdit(newSolid), 'alt+mod+y': ifEdit(() => addLayer(newLayer('adjustment', comp))), 'shift+alt+mod+y': ifEdit(() => addLayer(newLayer('null', comp))),
+    'alt+mod+y': ifEdit(() => addLayer(newLayer('adjustment', comp))), 'shift+alt+mod+y': ifEdit(() => addLayer(newLayer('null', comp))),
     'shift+mod+c': ifEdit(precompose), 'mod+k': ifEdit(() => setCompDialog(comp)), 'mod+n': ifEdit(newComp), 'mod+i': ifEdit(importMedia),
     b: ifEdit(() => editComp((c) => ({ ...c, work: [Math.min(time, (c.work || [0, c.duration])[1] - frame), (c.work || [0, c.duration])[1]] }), 'Work area start')),
     n: ifEdit(() => editComp((c) => ({ ...c, work: [(c.work || [0])[0], Math.max(time + frame, (c.work || [0])[0] + frame)] }), 'Work area end')),
     "'": () => setGuides((g) => !g),
-    'mod+]': ifEdit(() => reorder('up')), 'mod+[': ifEdit(() => reorder('down')), 'shift+mod+]': ifEdit(() => reorder('front')), 'shift+mod+[': ifEdit(() => reorder('back')),
+    'mod+]': ifEdit(() => reorder('up')), 'mod+[': ifEdit(() => reorder('down')), 'shift+mod+]': ifEdit(() => reorder('front')), 'shift+mod+[': ifEdit(() => reorder('back')), 'mod+}': ifEdit(() => reorder('front')), 'mod+{': ifEdit(() => reorder('back')),
     'alt+mod+home': ifEdit(centerAnchor), 'alt+mod+f': ifEdit(fitToComp),
     '.': () => setZoom((z) => Math.min(16, (z === 'fit' ? 0.5 : z) * 1.5)), ',': () => setZoom((z) => Math.max(0.05, (z === 'fit' ? 0.5 : z) / 1.5)), 'shift+/': () => setZoom('fit'),
     escape: () => { setSelKeys([]); if (tool !== 'select') setTool('select'); },
@@ -493,7 +493,7 @@ export default function MotionEditor({ id }) {
     { label: 'Layer', items: () => [
       { label: 'New', icon: 'plus', items: [
         { label: 'Text', icon: 'text', onClick: () => { const l = newLayer('text', comp, { size: Math.round(comp.height / 11) }); addLayer(l); setEditingText(l.id); }, disabled: !canEdit },
-        { label: 'Solid…', icon: 'square', shortcut: keyLabel('mod+y'), onClick: newSolid, disabled: !canEdit },
+        { label: 'Solid', icon: 'square', onClick: newSolid, disabled: !canEdit },
         { label: 'Shape layer', icon: 'shapes', onClick: () => addLayer(newLayer('shape', comp, { shapes: [], fill: newFill })), disabled: !canEdit },
         { label: 'Null object', icon: 'frame', shortcut: keyLabel('shift+alt+mod+y'), onClick: () => addLayer(newLayer('null', comp)), disabled: !canEdit },
         { label: 'Adjustment layer', icon: 'adjust', shortcut: keyLabel('alt+mod+y'), onClick: () => addLayer(newLayer('adjustment', comp)), disabled: !canEdit },

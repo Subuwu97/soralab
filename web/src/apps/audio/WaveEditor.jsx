@@ -434,7 +434,7 @@ export default function WaveEditor({ engine, file, clip, docId, canEdit, onApply
 }
 
 function NoiseDialog({ onClose, onRun, scope }) {
-  const [o, setO] = useState(() => { try { return { reduction: 18, sensitivity: 6, smoothing: 0.6, ...JSON.parse(localStorage.getItem('au-nr') || '{}') }; } catch { return { reduction: 18, sensitivity: 6, smoothing: 0.6 }; } });
+  const [o, setO] = useState(() => { try { return { reduction: 18, sensitivity: 8, smoothing: 0.6, ...JSON.parse(localStorage.getItem('au-nr') || '{}') }; } catch { return { reduction: 18, sensitivity: 8, smoothing: 0.6 }; } });
   const run = () => { try { localStorage.setItem('au-nr', JSON.stringify(o)); } catch { /* private mode */ } onRun(o); };
   return (
     <Modal title="Noise Reduction" onClose={onClose} width={400}

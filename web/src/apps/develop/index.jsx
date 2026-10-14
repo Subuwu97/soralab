@@ -32,6 +32,9 @@ const FILTER0 = { text: '', rating: 0, ratingOp: 'gte', flag: 'all', label: 'any
 const MASK_TOOLS = ['linear', 'radial', 'brush', 'mask'];
 const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };
+// Prompts opened from a button hand focus back to it on close, and the Enter that confirmed the prompt would
+// then "click" it again — so let go of focus first.
+const ask = (o) => { document.activeElement?.blur?.(); return promptDialog(o); };
 const baseName = (n) => (n || 'photo').replace(/\.[a-z0-9]+$/i, '');
 
 // Settings copied with Ctrl+Shift+C (kept for this browser, so they paste into other catalogs too).
@@ -165,7 +168,7 @@ export default function DevelopEditor({ id }) {
     addKeywords: (list) => { mapPhotos(targets, (p) => ({ ...p, keywords: [...new Set([...p.keywords, ...list])] }), 'Add keywords'); commit(); },
     removeKeyword: (k) => { mapPhotos(targets, (p) => ({ ...p, keywords: p.keywords.filter((x) => x !== k) }), 'Remove keyword'); commit(); },
     newCollection: async () => {
-      const name = await promptDialog({ title: 'New collection', label: 'Name', value: 'Collection' });
+      const name = await ask({ title: 'New collection', label: 'Name', value: 'Collection' });
       if (!name) return;
       const c = { id: uid('c'), name, photo_ids: view === 'library' ? targets : [] };
       h.set((d) => ({ ...d, collections: [...d.collections, c] }), 'New collection'); commit();
@@ -174,7 +177,7 @@ export default function DevelopEditor({ id }) {
     removeFromCollection: (cid) => { h.set((d) => ({ ...d, collections: d.collections.map((c) => (c.id === cid ? { ...c, photo_ids: c.photo_ids.filter((x) => !targets.includes(x)) } : c)) }), 'Remove from collection'); commit(); },
     renameCollection: async (cid) => {
       const c = doc.collections.find((x) => x.id === cid);
-      const name = await promptDialog({ title: 'Rename collection', label: 'Name', value: c.name });
+      const name = await ask({ title: 'Rename collection', label: 'Name', value: c.name });
       if (name) { h.set((d) => ({ ...d, collections: d.collections.map((x) => (x.id === cid ? { ...x, name } : x)) }), 'Rename collection'); commit(); }
     },
     deleteCollection: (cid) => { h.set((d) => ({ ...d, collections: d.collections.filter((x) => x.id !== cid) }), 'Delete collection'); commit(); if (filter.collection === cid) setFilter({ ...filter, collection: 'all' }); },
@@ -338,7 +341,7 @@ export default function DevelopEditor({ id }) {
   const presetsFromLib = useMemo(() => (libraries || []).flatMap((l) => l.items.filter((i) => i.kind === 'preset' && i.data?.app === 'develop').map((i) => ({ ...i, library: l.name }))), [libraries]);
   const savePreset = async () => {
     if (!photo) return;
-    const name = await promptDialog({ title: 'New develop preset', label: 'Preset name', value: 'My look', message: 'Saves the current settings (not crop or masks) to your Libraries, so you can apply them in any catalog.' });
+    const name = await ask({ title: 'New develop preset', label: 'Preset name', value: 'My look', message: 'Saves the current settings (not crop or masks) to your Libraries, so you can apply them in any catalog.' });
     if (!name) return;
     try {
       let target = libraries?.[0];
@@ -358,7 +361,7 @@ export default function DevelopEditor({ id }) {
   const leftEd = {
     applyPreset, savePreset, deletePreset,
     newSnapshot: async () => {
-      const name = await promptDialog({ title: 'New snapshot', label: 'Name', value: new Date().toLocaleString() });
+      const name = await ask({ title: 'New snapshot', label: 'Name', value: new Date().toLocaleString() });
       if (!name) return;
       mapPhotos([photo.id], (p) => ({ ...p, snapshots: [...p.snapshots, { id: uid('s'), name, s: compact(p.settings), created: Date.now() }] }), 'New snapshot');
       commit();

@@ -8,7 +8,8 @@ import { checkExpression, seedOf } from '../_anim/expr.js';
 import { BLEND_MODES, worldMatrix as worldOf } from '../_anim/comp.js';
 import { propGroups, getPath, updatePath, fmtTC, snapT, layerKeyTimes, LABELS } from './model.js';
 
-const LEFT = 480;
+const LEFT = 520;
+const PAD = 10; // room left of time 0 so the first keyframe isn't clipped
 const ROW = 22;
 export const keyId = (lid, path, t) => `${lid}|${path}|${Math.round(t * 1e4)}`;
 export const parseKeyId = (s) => { const [lid, path, t] = s.split('|'); return { lid, path, t: Number(t) / 1e4 }; };
@@ -48,7 +49,7 @@ export default function Timeline({
   const area = useRef(null);
   const scroller = useRef(null);
   const size = useSize(area);
-  const trackW = Math.max(100, (size.width || 900) - LEFT - 12);
+  const trackW = Math.max(100, (size.width || 900) - LEFT - 12 - PAD * 2);
   const [zoom, setZoom] = useState(1); // 1 = whole comp fits
   const [start, setStart] = useState(0);
   const pps = (trackW / comp.duration) * zoom;
@@ -56,8 +57,8 @@ export default function Timeline({
   useEffect(() => { setStart((s) => Math.max(0, Math.min(s, comp.duration - visDur))); }, [zoom, comp.duration, visDur]);
   // keep the playhead in view while playing
   useEffect(() => { if (playing && (time > start + visDur || time < start)) setStart(Math.max(0, Math.min(time, comp.duration - visDur))); }, [time, playing]); // eslint-disable-line react-hooks/exhaustive-deps
-  const tx = (t) => (t - start) * pps;
-  const xt = (x) => x / pps + start;
+  const tx = (t) => (t - start) * pps + PAD;
+  const xt = (x) => (x - PAD) / pps + start;
   const rows = useMemo(() => buildRows(comp, twirl, reveal), [comp, twirl, reveal]);
   const [box, setBox] = useState(null);
 
@@ -231,9 +232,9 @@ export default function Timeline({
       <div className="absolute -top-1 left-0 right-0 h-2 cursor-ns-resize z-20" onPointerDown={startResize} />
       {/* header: timecode + ruler */}
       <div className="flex h-9 shrink-0 border-b border-line">
-        <div style={{ width: LEFT }} className="shrink-0 flex items-center gap-2 px-2 border-r border-line">
+        <div style={{ width: LEFT }} className="shrink-0 flex items-center gap-0.5 pl-2 pr-1 border-r border-line">
           <span className="font-mono text-[15px] text-accent tabular-nums" data-testid="timecode">{fmtTC(time, comp.fps)}</span>
-          <span className="text-[11px] text-fg3 tabular-nums">{Math.round(time * comp.fps)} / {Math.round(comp.duration * comp.fps)} · {comp.fps} fps</span>
+          <span className="text-[11px] text-fg3 tabular-nums ml-2">{Math.round(time * comp.fps)} / {Math.round(comp.duration * comp.fps)} · {comp.fps} fps</span>
           <div className="flex-1" />
           <span className="text-[10.5px] text-fg3 w-[86px]">Mode</span>
           <span className="text-[10.5px] text-fg3 w-[86px]">Track matte</span>
@@ -272,7 +273,7 @@ export default function Timeline({
         </div>
       </div>
       <div className="h-6 shrink-0 border-t border-line flex items-center gap-2 px-2 text-[11px] text-fg3">
-        <span>{comp.layers.length} layer{comp.layers.length === 1 ? '' : 's'}{selKeys.length ? ` · ${selKeys.length} keyframe${selKeys.length === 1 ? '' : 's'} selected` : ''}</span>
+        <span className="whitespace-nowrap">{comp.layers.length} layer{comp.layers.length === 1 ? '' : 's'}{selKeys.length ? ` · ${selKeys.length} keyframe${selKeys.length === 1 ? '' : 's'} selected` : ''}</span>
         <div className="flex-1" />
         <Icon name="zoomOut" size={13} />
         <input type="range" className="sl-range w-40" min={0} max={Math.log(200)} step={0.01} value={Math.log(zoom)} onChange={(e) => setZoom(Math.exp(Number(e.target.value)))} aria-label="Timeline zoom" />
@@ -440,7 +441,7 @@ function PropRow({ row, layer, p, comp, time, tx, selKeys, canEdit, editLayer, s
     return num(shown, (x) => set(x, mk), { unit: prop.type === 'angle' ? '°' : prop.type === 'percent' ? '%' : '' });
   })();
   return (
-    <div className={cx('flex border-b border-line/30', isSel && 'bg-hover')} style={{ height: ROW }}>
+    <div className={cx('flex border-b border-line/30', isSel && 'bg-hover')} style={{ height: ROW }} data-testid={`prop-${prop.path}`}>
       <div style={{ width: LEFT, paddingLeft: depth * 26 + 10 }} className={cx('shrink-0 flex items-center gap-1.5 border-r border-line text-[12px]', isSel ? 'bg-hover' : 'bg-panel')} onPointerDown={() => setSelProp({ lid: layer.id, path: prop.path })}>
         <button type="button" title="Stopwatch: animate this property (Alt+click: expression)" className="text-fg2 hover:text-fg" data-testid={`stopwatch-${prop.path}`}
           onClick={(e) => {

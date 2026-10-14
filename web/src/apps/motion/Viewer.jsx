@@ -179,6 +179,7 @@ export default function Viewer({
       return;
     }
     if (tool === 'text') {
+      e.preventDefault(); // keep focus on the text box we're about to open
       const hit = hitTest(project, comp, time, p);
       if (hit?.type === 'text') { setSel([hit.id]); setEditingText(hit.id); return; }
       const l = newLayer('text', comp, { value: 'Text', position: p, size: Math.round(comp.height / 11) });
@@ -401,7 +402,7 @@ export default function Viewer({
         const M = worldMatrix(textEditLayer, time, comp);
         const p = toScreen(apply(M, [0, 0]));
         return (
-          <textarea autoFocus data-testid="text-edit" defaultValue={textEditLayer.text.value} spellCheck={false}
+          <textarea autoFocus ref={(el) => { if (el && !el.dataset.f) { el.dataset.f = '1'; setTimeout(() => { el.focus(); el.select(); }, 30); } }} data-testid="text-edit" defaultValue={textEditLayer.text.value} spellCheck={false}
             onPointerDown={(e) => e.stopPropagation()}
             onFocus={(e) => e.currentTarget.select()}
             onChange={(e) => { const v = e.target.value; editLayer(textEditLayer.id, (l) => ({ ...l, name: (v.split('\n')[0] || 'Text').slice(0, 32), text: { ...l.text, value: v } }), 'Edit text', `text-${textEditLayer.id}`); }}
@@ -412,7 +413,7 @@ export default function Viewer({
         );
       })()}
       <div className={cx('absolute left-2 bottom-2 text-[11px] text-fg3 bg-panel/80 rounded px-1.5 py-0.5 pointer-events-none')}>
-        {Math.round(view.scale * 100)}% · {rs >= 1 ? 'Full' : rs >= 0.5 ? 'Half' : rs >= 0.25 ? 'Quarter' : `${Math.round(rs * 100)}%`}
+        {Math.round(view.scale * 100)}% · {res === 'auto' ? `Auto (${Math.round(rs * 100)}%)` : rs >= 1 ? 'Full' : rs >= 0.5 ? 'Half' : 'Quarter'}
       </div>
     </div>
   );

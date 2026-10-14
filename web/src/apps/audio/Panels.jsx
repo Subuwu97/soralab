@@ -106,7 +106,7 @@ export function Rack({ title, effects, onChange, commit, canEdit }) {
     )}>
       {!effects.length && <p className="text-xs text-fg3">No effects. Add one with +, or pick a preset (Podcast voice, Telephone, Radio, Big room).</p>}
       {effects.map((fx, i) => (
-        <EffectCard key={fx.id} fx={fx} canEdit={canEdit} commit={commit}
+        <EffectCard key={fx.id} fx={fx} canEdit={canEdit} commit={commit} defaultOpen={effects.length <= 2 || i === effects.length - 1}
           onParams={(params, merge) => setFx(fx.id, { params }, FX[fx.type]?.name || 'Effect', merge)}
           onToggle={() => setFx(fx.id, { on: !fx.on }, fx.on ? 'Bypass effect' : 'Enable effect')}
           menu={(e) => openMenu(e, [
@@ -121,9 +121,9 @@ export function Rack({ title, effects, onChange, commit, canEdit }) {
   );
 }
 
-function EffectCard({ fx, canEdit, commit, onParams, onToggle, menu }) {
+function EffectCard({ fx, canEdit, commit, onParams, onToggle, menu, defaultOpen }) {
   const def = FX[fx.type];
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(defaultOpen);
   if (!def) return null;
   const mk = (k) => `${fx.id}-${k}`;
   return (
@@ -151,17 +151,16 @@ function EffectCard({ fx, canEdit, commit, onParams, onToggle, menu }) {
 
 /** A labelled slider; log-scaled for frequencies. */
 function ParamSlider({ p, value, onChange, onCommit, disabled }) {
-  if (!p.log) return <Slider label={p.label} value={value} min={p.min} max={p.max} step={p.step} unit={p.unit} reset={p.def} disabled={disabled} onChange={onChange} onCommit={onCommit} />;
-  const toPos = (v) => Math.log(v / p.min) / Math.log(p.max / p.min);
-  const fromPos = (x) => Math.round(p.min * (p.max / p.min) ** x);
+  const toPos = p.log ? (v) => Math.log(v / p.min) / Math.log(p.max / p.min) : (v) => (v - p.min) / (p.max - p.min);
+  const fromPos = p.log ? (x) => Math.round(p.min * (p.max / p.min) ** x) : (x) => Math.round((p.min + x * (p.max - p.min)) / p.step) * p.step;
   return (
     <div className={cx('flex flex-col gap-0.5', disabled && 'opacity-50 pointer-events-none')}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-fg2" onDoubleClick={() => { onChange(p.def); onCommit?.(); }}>{p.label}</span>
-        <NumberInput value={value} min={p.min} max={p.max} step={1} unit={p.unit} width={64} onChange={onChange} onCommit={onCommit} />
+        <NumberInput value={value} min={p.min} max={p.max} step={p.log ? 1 : p.step} unit={p.unit} width={p.unit ? 70 : 56} onChange={onChange} onCommit={onCommit} />
       </div>
       <input type="range" className="sl-range" min={0} max={1} step={0.001} value={toPos(value)} aria-label={p.label}
-        onChange={(e) => onChange(fromPos(Number(e.target.value)))} onPointerUp={() => onCommit?.()} />
+        onChange={(e) => onChange(+fromPos(Number(e.target.value)).toFixed(4))} onPointerUp={() => onCommit?.()} onDoubleClick={() => { onChange(p.def); onCommit?.(); }} />
     </div>
   );
 }

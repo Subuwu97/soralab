@@ -49,34 +49,47 @@ function noisePrint(channels) {
 
 /**
  * Spectral gate: bins that don't rise `sensitivity` dB above the noise print are pulled down by `reduction` dB.
- * The gate mask is smoothed across neighbouring bins and over time (fast open, slower close) to avoid "musical noise".
+ * The decision uses magnitudes averaged over 3 frames × 3 bins (noise is spiky bin by bin; the average isn't), with a
+ * soft knee, then the mask closes slowly over time (`smoothing`) to avoid warbly "musical noise".
  */
-function denoise(x, print, { reduction = 18, sensitivity = 6, smoothing = 0.6 }, onProgress) {
+function denoise(x, print, { reduction = 18, sensitivity = 8, smoothing = 0.6 }, onProgress) {
   const fft = fftFor(N); const w = hann(N); const bins = N / 2 + 1;
   const floor = 10 ** (-reduction / 20); const k = 10 ** (sensitivity / 20);
   const thr = Float64Array.from(print, (v) => v * k);
   const pad = N; const len = x.length;
   const src = new Float32Array(len + 2 * pad); src.set(x, pad);
   const out = new Float64Array(src.length); const norm = new Float64Array(src.length);
-  const re = new Float64Array(N); const im = new Float64Array(N);
-  const mask = new Float64Array(bins); const prev = new Float64Array(bins).fill(1); const sm = new Float64Array(bins);
-  const total = src.length - N;
-  for (let s = 0; s <= total; s += HOP) {
-    for (let i = 0; i < N; i++) { re[i] = src[s + i] * w[i]; im[i] = 0; }
+  const K = Math.floor((src.length - N) / HOP) + 1;
+  const frames = new Map();
+  const frame = (f) => {
+    if (f < 0 || f >= K) return null;
+    if (frames.has(f)) return frames.get(f);
+    const re = new Float64Array(N); const im = new Float64Array(N); const mag = new Float64Array(bins); const s = f * HOP;
+    for (let i = 0; i < N; i++) re[i] = src[s + i] * w[i];
     fft(re, im);
-    for (let b = 0; b < bins; b++) mask[b] = Math.hypot(re[b], im[b]) > thr[b] ? 1 : 0;
-    // frequency smoothing (3-bin average), then time smoothing
-    for (let b = 0; b < bins; b++) sm[b] = (mask[Math.max(0, b - 1)] + mask[b] + mask[Math.min(bins - 1, b + 1)]) / 3;
+    for (let b = 0; b < bins; b++) mag[b] = Math.hypot(re[b], im[b]);
+    const fr = { re, im, mag, s }; frames.set(f, fr);
+    return fr;
+  };
+  const prev = new Float64Array(bins).fill(1);
+  for (let f = 0; f < K; f++) {
+    const cur = frame(f); const nb = [frame(f - 1), cur, frame(f + 1)].filter(Boolean);
+    frames.delete(f - 2);
+    const { re, im } = cur;
     for (let b = 0; b < bins; b++) {
-      const m = sm[b] > prev[b] ? sm[b] : prev[b] * smoothing + sm[b] * (1 - smoothing);
+      let sum = 0; let n = 0;
+      for (const fr of nb) for (let d = -1; d <= 1; d++) { const bb = b + d; if (bb >= 0 && bb < bins) { sum += fr.mag[bb]; n++; } }
+      const r = sum / n / thr[b];
+      const m0 = r >= 1 ? 1 : r <= 0.8 ? 0 : (r - 0.8) / 0.2;
+      const m = m0 > prev[b] ? m0 : prev[b] * smoothing + m0 * (1 - smoothing);
       prev[b] = m;
       const g = floor + (1 - floor) * m;
       re[b] *= g; im[b] *= g;
       if (b > 0 && b < N / 2) { re[N - b] = re[b]; im[N - b] = -im[b]; }
     }
     fft(re, im, true);
-    for (let i = 0; i < N; i++) { out[s + i] += re[i] * w[i]; norm[s + i] += w[i] * w[i]; }
-    if (onProgress && (s / HOP) % 200 === 0) onProgress(s / total);
+    for (let i = 0; i < N; i++) { out[cur.s + i] += re[i] * w[i]; norm[cur.s + i] += w[i] * w[i]; }
+    if (onProgress && f % 200 === 0) onProgress(f / K);
   }
   const y = new Float32Array(len);
   for (let i = 0; i < len; i++) { const nn = norm[i + pad]; y[i] = nn > 1e-6 ? out[i + pad] / nn : 0; }
