@@ -103,8 +103,9 @@ export function useWide(px = 1024) {
 let pdfjsP = null;
 async function pdfjs() {
   pdfjsP ||= (async () => {
-    const lib = await import('pdfjs-dist');
-    const worker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
+    // The legacy build carries polyfills (Map.getOrInsertComputed…) that current browsers don't all have yet.
+    const lib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const worker = await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url');
     lib.GlobalWorkerOptions.workerSrc = worker.default;
     return lib;
   })();
@@ -114,7 +115,8 @@ async function pdfjs() {
 /** Renders page 1 of a PDF into a canvas `width` CSS pixels wide. Returns { pages, width, height } of page 1 in points. */
 export async function renderPdfFirstPage(url, canvas, width) {
   const lib = await pdfjs();
-  const doc = await lib.getDocument({ url, withCredentials: true }).promise;
+  const task = lib.getDocument({ url, withCredentials: true });
+  const doc = await task.promise;
   try {
     const page = await doc.getPage(1);
     const base = page.getViewport({ scale: 1 });
@@ -123,11 +125,11 @@ export async function renderPdfFirstPage(url, canvas, width) {
     canvas.width = Math.round(vp.width); canvas.height = Math.round(vp.height);
     await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp, canvas }).promise;
     return { pages: doc.numPages, width: Math.round(base.width), height: Math.round(base.height) };
-  } finally { doc.destroy(); }
+  } finally { task.destroy(); }
 }
 
 /** First page of a PDF, rendered when it scrolls into view. */
-export function PdfPreview({ url, width = 320, className, onInfo }) {
+export function PdfPreview({ url, width = 320, className, onInfo, fill }) {
   const wrap = useRef(null);
   const ref = useRef(null);
   const [state, setState] = useState('idle');
@@ -137,7 +139,7 @@ export function PdfPreview({ url, width = 320, className, onInfo }) {
     let off = false;
     const go = () => {
       setState('loading');
-      renderPdfFirstPage(url, ref.current, width).then((r) => { if (!off) { setState('ready'); info.current?.(r); } }).catch(() => { if (!off) setState('error'); });
+      renderPdfFirstPage(url, ref.current, width).then((r) => { if (!off) { setState('ready'); info.current?.(r); } }).catch((e) => { console.warn('PDF preview failed', e); if (!off) setState('error'); });
     };
     // Watch the wrapper (the canvas stays hidden until drawn, and hidden elements never intersect).
     const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { io.disconnect(); go(); } });
@@ -145,8 +147,8 @@ export function PdfPreview({ url, width = 320, className, onInfo }) {
     return () => { off = true; io.disconnect(); };
   }, [url, width]);
   return (
-    <div ref={wrap} className="w-full h-full grid place-items-center">
-      <canvas ref={ref} className={cx(className, state !== 'ready' && 'hidden')} />
+    <div ref={wrap} className={cx('w-full grid place-items-center', fill ? 'relative h-full' : 'min-h-24')}>
+      <canvas ref={ref} className={cx(className, fill && 'absolute inset-0 m-auto max-w-full max-h-full', state !== 'ready' && 'hidden')} />
       {state !== 'ready' && <Icon name="pdf" size={36} className={cx('text-fg3', state === 'loading' && 'animate-pulse')} />}
     </div>
   );

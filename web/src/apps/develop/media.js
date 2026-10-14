@@ -194,7 +194,8 @@ export function usePhotoThumb(photo, edited) {
   const key = edited ? thumbKey(photo) : photo.asset_id;
   useEffect(() => {
     let off2 = false;
-    (async () => {
+    // While someone is dragging a slider the key changes constantly; wait until it settles.
+    const t = setTimeout(async () => {
       try {
         const a = await getAsset(photo.asset_id);
         if (a.web_status === 'processing') {
@@ -205,8 +206,8 @@ export function usePhotoThumb(photo, edited) {
         const url = edited ? await editedThumb(photo) : `/api/assets/${photo.asset_id}/thumb`;
         if (!off2) setState({ url, processing: false, failed: false });
       } catch { if (!off2) setState({ url: null, processing: false, failed: true }); }
-    })();
-    return () => { off2 = true; };
+    }, state.url && edited ? 700 : 0);
+    return () => { off2 = true; clearTimeout(t); };
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   return state;
 }

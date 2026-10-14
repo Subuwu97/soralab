@@ -391,7 +391,7 @@ export function Modal({ title, onClose, children, footer, width = 480, className
   }, [onClose]);
   return createPortal(
     <div className="fixed inset-0 z-[900] grid place-items-center p-4 bg-black/55 backdrop-blur-[2px] sl-fade" onPointerDown={(e) => { if (closeOnBackdrop && e.target === e.currentTarget) onClose?.(); }}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} style={{ width, maxWidth: '100%' }}
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} style={{ width, maxWidth: 'calc(100vw - 2rem)' /* % doesn't resolve in the backdrop's auto grid track, so phones overflowed */ }}
         className={cx('bg-panel border border-line rounded-xl shadow-[0_24px_80px_rgba(0,0,0,.55)] max-h-[92vh] flex flex-col sl-pop', className)}>
         {title && (
           <div className="flex items-center gap-3 px-5 h-13 py-3 border-b border-line shrink-0">

@@ -17,7 +17,7 @@ function tokenize(src) {
   while (i < src.length) {
     const c = src[i];
     if (/\s/.test(c)) { i++; continue; }
-    if (/[0-9.]/.test(c)) {
+    if (/[0-9]/.test(c) || (c === '.' && /[0-9]/.test(src[i + 1] || ''))) {
       const m = /^(\d+\.?\d*|\.\d+)(e[+-]?\d+)?/i.exec(src.slice(i));
       if (!m) throw new Error(`Unexpected "${c}"`);
       out.push({ t: 'num', v: parseFloat(m[0]) }); i += m[0].length; continue;

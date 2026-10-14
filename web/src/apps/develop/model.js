@@ -212,7 +212,7 @@ export const apply = (M, x, y) => [M[0] * x + M[1] * y + M[2], M[3] * x + M[4] *
 export function frameOf(srcW, srcH, s, { full = false } = {}) {
   const [W, H] = orientedSize(srcW, srcH, s.orient);
   const c = s.crop;
-  const a = ((full ? c.angle : c.angle) * Math.PI) / 180;
+  const a = (-c.angle * Math.PI) / 180; // positive angles turn the picture clockwise
   let cx; let cy; let ow; let oh;
   if (full) {
     // Bounding box of the image rotated about its centre.
@@ -239,7 +239,7 @@ export function cropRectInFull(srcW, srcH, s) {
 
 /** Is the rotated crop fully inside the oriented image? */
 function cropInside(W, H, c) {
-  const a = (c.angle * Math.PI) / 180; const co = Math.cos(a); const si = Math.sin(a);
+  const a = (-c.angle * Math.PI) / 180; const co = Math.cos(a); const si = Math.sin(a);
   const hw = (c.w * W) / 2; const hh = (c.h * H) / 2;
   for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
     const x = c.cx * W + co * sx * hw - si * sy * hh; const y = c.cy * H + si * sx * hw + co * sy * hh;
@@ -392,7 +392,7 @@ export function sortPhotos(list, by, desc) {
 export function fullQToOriented(srcW, srcH, s, qx, qy) {
   const [W, H] = orientedSize(srcW, srcH, s.orient);
   const f = frameOf(srcW, srcH, s, { full: true });
-  const a = (s.crop.angle * Math.PI) / 180; const co = Math.cos(a); const si = Math.sin(a);
+  const a = (-s.crop.angle * Math.PI) / 180; const co = Math.cos(a); const si = Math.sin(a);
   const dx = (qx - 0.5) * f.outW; const dy = (qy - 0.5) * f.outH;
   return [(W / 2 + co * dx - si * dy) / W, (H / 2 + si * dx + co * dy) / H];
 }

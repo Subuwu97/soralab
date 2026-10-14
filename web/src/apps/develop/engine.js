@@ -277,13 +277,15 @@ export class Renderer {
   draw({ settings, frame, Q, width, height, draft = false, split = -1, clip = false, showMask = -1, lutOn = false }) {
     if (!this.src) return;
     const gl = this.gl;
+    this.drawStart = performance.now();
     if (this.canvas.width !== width || this.canvas.height !== height) { this.canvas.width = width; this.canvas.height = height; }
     gl.useProgram(this.main.p);
     gl.bindVertexArray(this.vao);
     this.setCurve(settings.curve);
     let Qd = Q; let tw = width; let th = height;
     if (draft) {
-      const f = 0.5;
+      // Draft resolution adapts to how long the last draft took, aiming for ~30 ms frames.
+      const f = this.draftScale || 0.5;
       tw = Math.max(1, Math.round(width * f)); th = Math.max(1, Math.round(height * f));
       if (!this.draftFbo || this.draftFbo.w !== tw || this.draftFbo.h !== th) { this.freeFbo(this.draftFbo); this.draftFbo = this.makeFbo(tw, th, false); }
       Qd = mul(Q, [width / tw, 0, 0, 0, height / th, 0]);
@@ -308,6 +310,7 @@ export class Renderer {
     gl.blitFramebuffer(0, 0, tw, th, 0, 0, this.histFbo.w, this.histFbo.h, gl.COLOR_BUFFER_BIT, gl.LINEAR);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.histDirty = true;
+    this.lastDraft = draft;
   }
 
   histogram() {
@@ -318,6 +321,12 @@ export class Renderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.histFbo.fb);
     gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    // readPixels waits for the GPU, so this measures the draw that was just made.
+    if (this.lastDraft && this.drawStart) {
+      const ms = performance.now() - this.drawStart;
+      const f = this.draftScale || 0.5;
+      this.draftScale = Math.max(0.2, Math.min(0.5, f * Math.max(0.7, Math.min(1.2, Math.sqrt(30 / Math.max(1, ms))))));
+    }
     const r = new Uint32Array(256); const g = new Uint32Array(256); const b = new Uint32Array(256);
     let n = 0;
     for (let i = 0; i < px.length; i += 4) {

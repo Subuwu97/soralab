@@ -108,6 +108,7 @@ export default function Viewer({
   const prevSettings = useRef(null);
   const raf = useRef(0);
   const idleTimer = useRef(0);
+  const lastHist = useRef(0);
   const splitQ = before === 'full' ? 2 : before === 'split' ? (split * size.w - ox) / iw : -1;
   const showMaskIdx = showOverlay && maskSel ? (settings.masks || []).filter((m) => m.visible !== false).findIndex((m) => m.id === maskSel) : -1;
   const drawNow = useCallback((draft) => {
@@ -115,7 +116,8 @@ export default function Viewer({
     if (!ren?.src || !size.w) return;
     const W = Math.round(size.w * dpr); const H = Math.round(size.h * dpr);
     ren.draw({ settings, frame, Q: fragToQ(V, H, dpr), width: W, height: H, draft, split: splitQ, clip, showMask: showMaskIdx, lutOn: !!settings.lut && lutReady === settings.lut.asset_id });
-    onHistogram?.(ren.histogram());
+    // The histogram re-renders the panels, so while dragging it only updates a few times a second.
+    if (!draft || performance.now() - lastHist.current > 200) { lastHist.current = performance.now(); onHistogram?.(ren.histogram()); }
   }, [settings, frame, V, size, dpr, splitQ, clip, showMaskIdx, lutReady, onHistogram]);
   useEffect(() => {
     if (!srcKey) return undefined;
@@ -279,7 +281,8 @@ export default function Viewer({
     if (d.kind === 'crop-rotate') {
       const cxs = ox + (r0.x + r0.w / 2) * iw; const cys = oy + (r0.y + r0.h / 2) * ih;
       const a0 = Math.atan2(d.y0 - cys, d.x0 - cxs); const a1 = Math.atan2(y - cys, x - cxs);
-      const ang = clamp(c0.angle - ((a1 - a0) * 180) / Math.PI, -45, 45);
+      let da = a1 - a0; if (da > Math.PI) da -= 2 * Math.PI; if (da < -Math.PI) da += 2 * Math.PI;
+      const ang = clamp(c0.angle + (da * 180) / Math.PI, -45, 45);
       crop = constrainCrop(sw, sh, settings, { ...c0, angle: Math.round(ang * 10) / 10 });
     } else {
       let { x: rx, y: ry, w: rw, h: rh } = r0;
