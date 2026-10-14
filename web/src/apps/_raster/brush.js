@@ -268,26 +268,26 @@ export class Stroke {
     const x0 = Math.round(cx - s / 2); const y0 = Math.round(cy - s / 2);
     const strength = Math.min(1, b.strength * (b.pressureOpacity ? alpha / Math.max(0.01, b.flow) : 1));
     if (b.kind === 'smudge' || b.kind === 'blend') {
-      if (!this.carry) {
-        this.carry = makeCanvas(s, s);
-        const cc = this.carry.getContext('2d'); cc.clearRect(0, 0, s, s); cc.drawImage(m.canvas, x0, y0, s, s, 0, 0, s, s);
-        if (b.kind === 'blend') { cc.globalAlpha = 0.5; cc.drawImage(tinted(this.tip, this.color), 0, 0, s, s); cc.globalAlpha = 1; }
-        return;
-      }
+      // "smearing": take the patch under the previous dab and lay it down here. The strength is per 40% of a
+      // brush-width of travel, so the smear length doesn't depend on spacing, and the smear fades naturally.
+      const prev = this.prevDab;
+      this.prevDab = { x0, y0, s };
+      if (!prev) return;
+      const step = Math.hypot(x0 - prev.x0, y0 - prev.y0);
+      if (step < 0.5) return;
+      const a = Math.pow(strength, step / Math.max(1, w * 0.4));
       const t = scratch(s, s); const tc = t.getContext('2d');
-      tc.drawImage(this.carry, 0, 0, this.carry.width, this.carry.height, 0, 0, s, s);
-      if (b.kind === 'blend') { tc.globalAlpha = Math.min(1, alpha * 0.35); tc.drawImage(tinted(this.tip, this.color), 0, 0, s, s); tc.globalAlpha = 1; }
+      tc.drawImage(m.canvas, prev.x0 + (prev.s - s) / 2, prev.y0 + (prev.s - s) / 2, s, s, 0, 0, s, s);
+      if (b.kind === 'blend') { tc.globalAlpha = Math.min(1, alpha * 0.18); tc.drawImage(tinted(this.tip, this.color), 0, 0, s, s); tc.globalAlpha = 1; }
       tc.globalCompositeOperation = 'destination-in';
       tc.translate(s / 2, s / 2); if (angle) tc.rotate(angle); tc.drawImage(this.tip, -w / 2, -h / 2, w, h); tc.setTransform(1, 0, 0, 1, 0, 0);
-      m.ctx.save(); m.ctx.globalAlpha = b.kind === 'blend' ? Math.min(1, 0.4 + strength * 0.6) : strength; m.ctx.drawImage(t, 0, 0, s, s, x0, y0, s, s); m.ctx.restore();
-      // pick up what's under the brush now: carry = carry·k + canvas·(1−k), an exact mix in premultiplied space
-      const k = b.kind === 'blend' ? 0.75 : Math.min(0.98, strength);
-      const cw = this.carry.width; const ch = this.carry.height;
-      const mix = scratch(cw, ch); const mc = mix.getContext('2d');
-      mc.globalAlpha = k; mc.drawImage(this.carry, 0, 0);
-      mc.globalAlpha = 1 - k; mc.globalCompositeOperation = 'lighter'; mc.drawImage(m.canvas, x0, y0, s, s, 0, 0, cw, ch);
-      const cc = this.carry.getContext('2d');
-      cc.clearRect(0, 0, cw, ch); cc.drawImage(mix, 0, 0, cw, ch, 0, 0, cw, ch);
+      // 'copy'-like replacement inside the tip: fade out what's here, then add the smeared patch
+      m.ctx.save();
+      m.ctx.globalAlpha = a; m.ctx.globalCompositeOperation = 'destination-out';
+      m.ctx.drawImage(this.tip, x0 + (s - w) / 2, y0 + (s - h) / 2, w, h);
+      m.ctx.globalCompositeOperation = 'lighter';
+      m.ctx.drawImage(t, 0, 0, s, s, x0, y0, s, s);
+      m.ctx.restore();
     } else if (b.kind === 'blur') {
       const pad = 6;
       const t = scratch(s + pad * 2, s + pad * 2); const tc = t.getContext('2d');

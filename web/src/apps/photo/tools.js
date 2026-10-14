@@ -323,10 +323,13 @@ export function cropTool(ed) {
   const t = {
     id: 'crop', cursor: 'crosshair',
     get box() { return box; },
-    reset() { const d = ed.doc; box = { x: 0, y: 0, w: d.width, h: d.height }; ed.vp?.overlay(); },
+    reset() { const d = ed.doc; box = { x: 0, y: 0, w: d.width, h: d.height }; t.fresh = true; ed.vp?.overlay(); },
     down(p, e, api) {
       if (!box) t.reset();
-      const h = hitBox(api, box, p);
+      let h = hitBox(api, box, p);
+      // on the untouched full-canvas frame, dragging inside draws a new crop box (as in Photoshop)
+      if (t.fresh && h === 'move') h = 'new';
+      t.fresh = false;
       drag = { h, x0: p.x, y0: p.y, b0: { ...box } };
       if (h === 'new') { box = { x: p.x, y: p.y, w: 0, h: 0 }; drag.b0 = { ...box }; drag.h = 'se'; }
     },
@@ -355,7 +358,8 @@ export function cropTool(ed) {
     hover(p, e, api) { if (box && api) api.el.style.cursor = CURSORS[hitBox(api, box, p)] || 'crosshair'; },
     apply() {
       if (!box || box.w < 1 || box.h < 1) return;
-      ed.commit(cropDoc(ed.doc, roundRect(box), ed.opts('crop').deletePixels !== false), 'Crop');
+      const r = { x: Math.round(box.x), y: Math.round(box.y), w: Math.max(1, Math.round(box.w)), h: Math.max(1, Math.round(box.h)) };
+      ed.commit(cropDoc(ed.doc, r, ed.opts('crop').deletePixels !== false), 'Crop');
       box = null; ed.fit();
     },
     cancel() { box = null; ed.vp?.overlay(); },
