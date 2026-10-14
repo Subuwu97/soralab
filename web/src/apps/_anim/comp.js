@@ -44,6 +44,14 @@ function release(c) {
   if (l.length < 12) l.push(c);
 }
 
+/** Keeps a small copy of a video's current frame so scrubbing doesn't blink while the next frame decodes. */
+function rememberFrame(v) {
+  const w = Math.min(960, v.videoWidth || 0); if (!w) return;
+  const h = Math.round((w * v.videoHeight) / v.videoWidth);
+  if (!v._last || v._last.width !== w) v._last = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
+  v._last.getContext('2d').drawImage(v, 0, 0, w, h);
+}
+
 // ---------------------------------------------------------------- property evaluation
 
 /** Evaluates a property of a layer at t (expressions get a per-layer, per-property seed). */
@@ -292,7 +300,10 @@ function layerBuffer(project, comp, layer, t, s, depth, opts) {
     case 'video': {
       const v = getVideo((opts.keyPrefix || '') + layer.id, layer.asset);
       if (!opts.wait) syncVideo(v, t - layer.start, !!opts.playing);
-      if (videoReady(v)) ctx.drawImage(v, 0, 0, layer.w, layer.h);
+      if (videoReady(v)) {
+        ctx.drawImage(v, 0, 0, layer.w, layer.h);
+        if (!opts.wait && !opts.playing) rememberFrame(v);
+      } else if (!opts.wait && v._last) ctx.drawImage(v._last, 0, 0, layer.w, layer.h); // still seeking: show the previous frame, no flicker
       break;
     }
     case 'precomp': {
