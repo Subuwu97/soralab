@@ -64,6 +64,10 @@ docs.post('/docs', express.json({ limit: `${config.maxDocMb}mb` }), (req, res) =
   db.prepare(`INSERT INTO docs (id, owner, app, name, size, rev, width, height, duration, pages, meta, created_at, updated_at, opened_at)
     VALUES (?,?,?,?,?,1,?,?,?,?,?,?,?,?)`).run(id, req.user.id, b.app, clean(b.name, 200) || 'Untitled', body.length, d.width, d.height, d.duration, d.pages,
     JSON.stringify(b.meta && typeof b.meta === 'object' ? b.meta : {}).slice(0, 8000), t, t, t);
+  // Files the project starts from (a PDF to open, images from "Open in…") belong to it, so people it's shared with can open them.
+  const start = [b.meta?.source, ...(Array.isArray(b.meta?.import) ? b.meta.import : [])].filter((x) => typeof x === 'string').slice(0, 200);
+  const attach = db.prepare("UPDATE assets SET doc_id = ?, source = CASE WHEN source LIKE 'keep%' THEN source ELSE 'keep:' || COALESCE(source,'') END WHERE id = ? AND owner = ? AND doc_id IS NULL");
+  for (const a of start) attach.run(id, a, req.user.id);
   res.status(201).json(docOut(db.prepare('SELECT * FROM docs WHERE id = ?').get(id), req.user));
 });
 
