@@ -20,6 +20,7 @@ import {
 import * as ops from './ops.js';
 import { layoutDoc, onImagesChanged, imageStatus, renderPageCanvas } from './render.js';
 import { exportPdf, exportImages, printDoc } from './exporter.js';
+import { linkAssets } from './link.js';
 import Workspace, { computeSlots } from './Workspace.jsx';
 import Panels, { OptionsBar, docSetupDialog, FindChange } from './Panels.jsx';
 
@@ -60,6 +61,9 @@ function Editor({ project, h }) {
   const app = appById(APP);
 
   useEffect(() => onImagesChanged(() => setImgTick((t) => t + 1)), []);
+  // attach placed images to this project so people it's shared with can see them
+  const imageIds = useMemo(() => [...new Set(doc.items.filter((it) => it.asset).map((it) => it.asset))].join(','), [doc.items]);
+  useEffect(() => { if (canEdit && project.doc?.role === 'owner') linkAssets(imageIds.split(',').filter(Boolean), project.doc.id); }, [imageIds, canEdit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load every font the document uses, then re-measure.
   const fontKey = useMemo(() => {

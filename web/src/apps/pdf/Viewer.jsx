@@ -466,7 +466,7 @@ function FormLayer({ ed, fields, m, info }) {
   const val = (f) => (f.name in ed.data.form ? ed.data.form[f.name] : defaultValue(f));
   const dis = !ed.canEdit || ed.tool === 'hand';
   return (
-    <div className="absolute left-0 top-0" style={{ width: info.w, height: info.h, transform: `matrix(${m.join(',')})`, transformOrigin: '0 0', pointerEvents: 'none' }}>
+    <div className="absolute left-0 top-0" style={{ width: info.w, height: info.h, transform: `matrix(${m.join(',')})`, transformOrigin: '0 0', pointerEvents: 'none', colorScheme: 'light' }}>
       {fields.map((f) => {
         const [x, y, w, h] = f.rect;
         const st = { position: 'absolute', left: x, top: y, width: w, height: h, pointerEvents: dis ? 'none' : 'auto', fontSize: Math.max(7, Math.min(14, h * 0.62)) };

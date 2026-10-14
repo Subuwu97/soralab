@@ -444,7 +444,8 @@ function annotationDict(out, a, rectPdf, P, helv) {
 
 /** Replaces pages (by index) with images of themselves: removes the text underneath for real. */
 export async function rasterizePages(bytes, indexes, { dpi = 150, quality = 0.85, onProgress } = {}) {
-  const src = await pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false }).promise;
+  const task = pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false });
+  const src = await task.promise;
   const out = await PDFDocument.load(bytes, { ignoreEncryption: true });
   let k = 0;
   for (const i of indexes) {
@@ -463,13 +464,14 @@ export async function rasterizePages(bytes, indexes, { dpi = 150, quality = 0.85
     k++;
     onProgress?.(k / indexes.length);
   }
-  src.destroy();
+  task.destroy();
   return out.save();
 }
 
 /** Pages of a finished PDF as PNG/JPEG (a ZIP for several). */
 export async function pdfToImages(bytes, { format = 'png', dpi = 150, quality = 0.9, name = 'Page', onProgress } = {}) {
-  const src = await pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false }).promise;
+  const task = pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false });
+  const src = await task.promise;
   const files = {}; let only = null;
   const type = format === 'jpeg' ? 'image/jpeg' : 'image/png';
   for (let i = 1; i <= src.numPages; i++) {
@@ -483,7 +485,7 @@ export async function pdfToImages(bytes, { format = 'png', dpi = 150, quality = 
     else files[`${name}-${String(i).padStart(3, '0')}.${format === 'jpeg' ? 'jpg' : 'png'}`] = new Uint8Array(await blob.arrayBuffer());
     onProgress?.(i / src.numPages, `Page ${i} of ${src.numPages}`);
   }
-  src.destroy();
+  task.destroy();
   return only || new Blob([zipSync(files, { level: 0 })], { type: 'application/zip' });
 }
 

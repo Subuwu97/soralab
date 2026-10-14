@@ -15,6 +15,7 @@ import { Spinner, toast, toastError, confirmDialog, promptDialog, Button } from 
 import { Icon } from '../../components/Icons.jsx';
 import { loadAsset, pageList, entryInfo, buildPdf, formFields, renderEntry, pdfToImages, splitPdf, parseRanges, rasterizePages, pageText, findInPage, displaySize } from './engine.js';
 import Viewer from './Viewer.jsx';
+import { linkAssets } from './link.js';
 import { RightPanels, LeftSidebar, OptionsBar, Organizer, signatureDialog, splitDialog } from './Panels.jsx';
 
 const APP = 'pdf';
@@ -82,6 +83,9 @@ function Editor({ project, h }) {
     })();
     return () => { off = true; };
   }, [docKeys]); // eslint-disable-line react-hooks/exhaustive-deps
+  // attach the PDFs and signatures this project uses to it, so people it's shared with can open them
+  const assetIds = useMemo(() => [data.source, ...data.inserted.map((x) => x.asset), ...data.annotations.filter((a) => a.asset).map((a) => a.asset)].filter(Boolean).join(','), [data.source, data.inserted, data.annotations]);
+  useEffect(() => { if (canEdit && project.doc?.role === 'owner') linkAssets(assetIds.split(',').filter(Boolean), project.doc.id); }, [assetIds, canEdit]); // eslint-disable-line react-hooks/exhaustive-deps
   const ready = !data.source || !!docs.source;
   const list = useMemo(() => (ready ? pageList(data, docs) : []), [data, docs, ready]);
   const infos = useMemo(() => list.map((e) => entryInfo(e, docs)), [list, docs]);
