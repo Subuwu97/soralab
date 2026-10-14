@@ -24,7 +24,15 @@ function jobOut(j) {
     id: j.id, kind: j.kind, name: j.name, doc_id: j.doc_id, status: j.status, progress: j.progress, error: j.error, encoder: j.encoder,
     output: out ? assetOut(out) : null, after: json(j.after, null), after_result: json(j.after_result, null),
     format: spec.output || null, created_at: j.created_at, started_at: j.started_at, finished_at: j.finished_at,
+    // For the Encoder's list: what was converted, and the size/trim asked for.
+    source: j.kind === 'transcode' ? sourceOf(spec.asset_id) : null,
+    settings: { preset: spec.preset || null, width: spec.width || null, height: spec.height || null, fps: spec.fps || null, trim: spec.trim || spec.range || null },
   };
+}
+
+function sourceOf(id) {
+  const a = id ? db.prepare('SELECT id, name, kind, duration FROM assets WHERE id = ?').get(String(id)) : null;
+  return a ? { id: a.id, name: a.name, kind: a.kind, duration: a.duration } : null;
 }
 
 jobs.get('/render/info', h(async (req, res) => res.json(await renderInfo())));

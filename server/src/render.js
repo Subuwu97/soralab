@@ -157,13 +157,83 @@ function effectFilters(effects = []) {
   return f;
 }
 
+// Keyframes: { prop: [{ t, v }] } with t in seconds from the clip's start on the timeline, linearly interpolated and held
+// before the first / after the last key. kfExpr turns them into an ffmpeg expression of `T` (an expression for clip time).
+const kfList = (c, prop) => (Array.isArray(c.keyframes?.[prop]) ? c.keyframes[prop] : [])
+  .map((k) => ({ t: num(k.t), v: num(k.v) })).filter((k) => Number.isFinite(k.t) && Number.isFinite(k.v)).sort((a, b) => a.t - b.t);
+const hasKf = (c, prop) => kfList(c, prop).length > 1;
+function kfExpr(keys, T, map = (v) => v) {
+  const f = (x) => Number(x.toFixed(5));
+  let e = String(f(map(keys[keys.length - 1].v)));
+  for (let i = keys.length - 2; i >= 0; i--) {
+    const a = keys[i]; const b = keys[i + 1];
+    const va = f(map(a.v)); const vb = f(map(b.v)); const span = Math.max(1e-4, b.t - a.t);
+    e = `if(lt(${T},${f(b.t)}),${va}+(${f(vb - va)})*(${T}-${f(a.t)})/${f(span)},${e})`;
+  }
+  return `if(lt(${T},${f(keys[0].t)}),${f(map(keys[0].v))},${e})`;
+}
+
+/**
+ * Transitions: a clip's `transition_in: { type, duration }` joins it to the clip that ends where it starts on the same track.
+ *   dissolve (video) / crossfade (audio): both clips are extended into each other's media (up to duration/2 each, as far as
+ *     the source allows) and the incoming clip fades in (alpha, or volume for sound) over the overlap.
+ *   dip_black / dip_white: the outgoing clip fades to the colour over the first half, the incoming fades from it over the second.
+ * Returns the clips sorted by start with the extensions applied (extra fields: _xin, _dip_in, _dip_out, _xout for audio).
+ */
+function applyTransitions(clips, isAudio) {
+  const list = clips.map((c) => ({ ...c, start: num(c.start), duration: Math.max(0, num(c.duration)), in: Math.max(0, num(c.in)) })).sort((a, b) => a.start - b.start);
+  const srcLen = (c) => { if (!c.asset_id) return Infinity; const p = assetPath(c.asset_id); return p && p.a.kind !== 'image' ? num(p.a.duration, Infinity) : Infinity; };
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i]; const tr = c.transition_in;
+    if (!tr || !tr.type) continue;
+    const prev = list.slice(0, i).reverse().find((p) => Math.abs(p.start + p.duration - c.start) < 0.02);
+    const d = clamp(num(tr.duration, 1), 0.04, 10);
+    if (!prev) { // nothing to join: a lone fade from black / transparent
+      if (isAudio) c.fade_in = Math.max(num(c.fade_in), d); else if (tr.type.startsWith('dip')) c._dip_in = { d, color: tr.type === 'dip_white' ? 'white' : 'black' }; else c.fade_in = Math.max(num(c.fade_in), d);
+      continue;
+    }
+    if (tr.type === 'dip_black' || tr.type === 'dip_white') {
+      const color = tr.type === 'dip_white' ? 'white' : 'black';
+      const h = Math.min(d / 2, prev.duration, c.duration);
+      prev._dip_out = { d: h, color }; c._dip_in = { d: h, color };
+      continue;
+    }
+    // dissolve / crossfade
+    const sp = clamp(num(c.speed, 1), 0.05, 16); const psp = clamp(num(prev.speed, 1), 0.05, 16);
+    const a = Math.max(0, Math.min(d / 2, c.in / sp));                                                     // incoming starts earlier
+    const b = Math.max(0, Math.min(d / 2, (srcLen(prev) - (prev.in + prev.duration * psp)) / psp));         // outgoing runs longer
+    if (a + b < 0.02) continue;
+    c.start -= a; c.in -= a * sp; c.duration += a; c._shift = (c._shift || 0) + a;
+    prev.duration += b;
+    c._xin = a + b;
+    if (isAudio) prev._xout = a + b;
+  }
+  // Keyframe times are relative to the clip start, which may have moved earlier.
+  for (const c of list) {
+    if (c._shift && c.keyframes) c.keyframes = Object.fromEntries(Object.entries(c.keyframes).map(([k, l]) => [k, (Array.isArray(l) ? l : []).map((x) => ({ ...x, t: num(x.t) + c._shift }))]));
+  }
+  return list;
+}
+
+/** Stereo balance: -1 (left) … 1 (right). */
+const panFilter = (p) => {
+  const v = clamp(num(p), -1, 1);
+  if (Math.abs(v) < 0.005) return null;
+  return `pan=stereo|c0=${Math.min(1, 1 - v).toFixed(3)}*c0|c1=${Math.min(1, 1 + v).toFixed(3)}*c1`;
+};
+
 /**
  * Builds ffmpeg arguments for a timeline. Spec:
  * { width, height, fps, duration, background, master_volume,
  *   video: [{ hidden, clips: [{ asset_id | color, start, in, duration, speed, volume, mute, opacity, fade_in, fade_out, audio_fade_in, audio_fade_out,
- *            transform: { x, y, scale, rotation, fit: contain|cover|stretch|none }, crop: { l, t, r, b }, effects: [...] }] }],   // bottom track first
- *   audio: [{ mute, volume, clips: [{ asset_id, start, in, duration, speed, volume, fade_in, fade_out }] }],
+ *            transform: { x, y, scale, rotation, fit: contain|cover|stretch|none }, crop: { l, t, r, b }, effects: [...],
+ *            keyframes: { x, y, scale, rotation, opacity: [{ t, v }] },              // t = seconds from the clip's start
+ *            transition_in: { type: dissolve|dip_black|dip_white, duration } }] }],  // bottom track first
+ *   audio: [{ mute, volume, pan, clips: [{ asset_id, start, in, duration, speed, volume, pan, fade_in, fade_out,
+ *            keyframes: { volume: [{ t, v }] }, transition_in: { type: crossfade, duration } }] }],
  *   range: { start, end }, output: { container, vcodec, quality, crf, video_bitrate, audio_codec, audio_bitrate } }
+ * Keyframed x/y become overlay expressions, scale a per-frame scale padded to its largest size, rotation a rotate
+ * expression, opacity a geq alpha expression (slower — only used when opacity is keyframed), volume a volume expression.
  */
 export async function timelineArgs(spec, out, prof) {
   const W = clamp(Math.round(num(spec.width, 1920) / 2) * 2, 16, 8192);
@@ -196,7 +266,7 @@ export async function timelineArgs(spec, out, prof) {
   let vi = 0;
   for (const track of spec.video || []) {
     if (track.hidden) continue;
-    for (const c of track.clips || []) {
+    for (const c of applyTransitions(track.clips || [], false)) {
       const w = window(c);
       if (!w) continue;
       const p = c.asset_id ? assetPath(c.asset_id) : null;
@@ -224,43 +294,70 @@ export async function timelineArgs(spec, out, prof) {
         const sc = clamp(num(tf.scale, 1), 0.01, 20);
         const fit = tf.fit || 'contain';
         const bw = Math.max(2, Math.round((W * sc) / 2) * 2); const bh = Math.max(2, Math.round((H * sc) / 2) * 2);
-        if (fit === 'cover') chain.push(`scale=${bw}:${bh}:force_original_aspect_ratio=increase`, `crop=${bw}:${bh}`);
-        else if (fit === 'stretch') chain.push(`scale=${bw}:${bh}`);
-        else if (fit === 'none') chain.push(`scale=trunc(iw*${sc}/2)*2:trunc(ih*${sc}/2)*2`);
-        else chain.push(`scale=${bw}:${bh}:force_original_aspect_ratio=decrease`);
-        chain.push('format=yuva420p');
+        // Clip time (seconds from the clip's start) inside this chain, where t starts at 0 at the visible window.
+        const CT = `(t+${w.cut.toFixed(4)})`;
+        if (hasKf(c, 'scale')) {
+          // Per-frame size, padded to the largest size so the overlay always gets frames of one size.
+          const sw0 = (src ? num(p.a.width, W) : W) * (1 - clamp(num(cr.l), 0, 0.95) - clamp(num(cr.r), 0, 0.95));
+          const sh0 = (src ? num(p.a.height, H) : H) * (1 - clamp(num(cr.t), 0, 0.95) - clamp(num(cr.b), 0, 0.95));
+          const k = fit === 'stretch' ? null : fit === 'cover' ? Math.max(W / sw0, H / sh0) : Math.min(W / sw0, H / sh0);
+          const bw0 = k ? sw0 * k : W; const bh0 = k ? sh0 * k : H;
+          const keys = kfList(c, 'scale').map((x) => ({ ...x, v: clamp(x.v, 0.01, 20) }));
+          const maxS = Math.max(...keys.map((x) => x.v));
+          const S = kfExpr(keys, CT);
+          chain.push(`scale=w='max(2,trunc(${bw0.toFixed(2)}*(${S})/2)*2)':h='max(2,trunc(${bh0.toFixed(2)}*(${S})/2)*2)':eval=frame`, 'format=yuva420p',
+            `pad=w=${Math.ceil((bw0 * maxS) / 2) * 2 + 2}:h=${Math.ceil((bh0 * maxS) / 2) * 2 + 2}:x='(ow-iw)/2':y='(oh-ih)/2':color=black@0:eval=frame`);
+        } else {
+          if (fit === 'cover') chain.push(`scale=${bw}:${bh}:force_original_aspect_ratio=increase`, `crop=${bw}:${bh}`);
+          else if (fit === 'stretch') chain.push(`scale=${bw}:${bh}`);
+          else if (fit === 'none') chain.push(`scale=trunc(iw*${sc}/2)*2:trunc(ih*${sc}/2)*2`);
+          else chain.push(`scale=${bw}:${bh}:force_original_aspect_ratio=decrease`);
+          chain.push('format=yuva420p');
+        }
         const rot = num(tf.rotation);
-        if (rot % 360) chain.push(`rotate=${(rot * Math.PI / 180).toFixed(5)}:c=none:ow=rotw(${(rot * Math.PI / 180).toFixed(5)}):oh=roth(${(rot * Math.PI / 180).toFixed(5)})`);
-        const op = clamp(num(c.opacity, 1), 0, 1);
-        if (op < 1) chain.push(`colorchannelmixer=aa=${op.toFixed(3)}`);
-        // Fades (relative to the clip, so a range starting mid-clip still fades correctly).
-        const fi = num(c.fade_in); const fo = num(c.fade_out);
+        if (hasKf(c, 'rotation')) chain.push(`rotate=a='(${kfExpr(kfList(c, 'rotation'), CT)})*PI/180':c=none:ow='hypot(iw,ih)':oh='hypot(iw,ih)'`);
+        else if (rot % 360) chain.push(`rotate=${(rot * Math.PI / 180).toFixed(5)}:c=none:ow=rotw(${(rot * Math.PI / 180).toFixed(5)}):oh=roth(${(rot * Math.PI / 180).toFixed(5)})`);
+        if (hasKf(c, 'opacity')) {
+          chain.push(`geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='alpha(X,Y)*clip(${kfExpr(kfList(c, 'opacity'), `(T+${w.cut.toFixed(4)})`)},0,1)'`);
+        } else {
+          const op = clamp(num(c.opacity, 1), 0, 1);
+          if (op < 1) chain.push(`colorchannelmixer=aa=${op.toFixed(3)}`);
+        }
+        // Fades (relative to the clip, so a range starting mid-clip still fades correctly). A dissolve fades the incoming clip in.
+        const fi = Math.max(num(c.fade_in), num(c._xin)); const fo = num(c.fade_out);
         if (fi > 0 && w.cut < fi) chain.push(`fade=t=in:st=${(-w.cut).toFixed(3)}:d=${fi.toFixed(3)}:alpha=1`);
         if (fo > 0) chain.push(`fade=t=out:st=${(w.dur - fo - w.cut).toFixed(3)}:d=${fo.toFixed(3)}:alpha=1`);
+        // Dips fade the picture itself to a colour (not to transparent).
+        if (c._dip_in && w.cut < c._dip_in.d) chain.push(`fade=t=in:st=${(-w.cut).toFixed(3)}:d=${c._dip_in.d.toFixed(3)}:color=${c._dip_in.color}`);
+        if (c._dip_out) chain.push(`fade=t=out:st=${(w.dur - c._dip_out.d - w.cut).toFixed(3)}:d=${c._dip_out.d.toFixed(3)}:color=${c._dip_out.color}`);
         chain.push(`setpts=PTS+${w.at.toFixed(3)}/TB`);
         const lbl = `v${vi}`;
         filters.push(`${src || ''}${chain.join(',')}[${lbl}]`);
         const x = num(tf.x); const y = num(tf.y);
-        filters.push(`[${base}][${lbl}]overlay=x=(W-w)/2+${x.toFixed(1)}:y=(H-h)/2+${y.toFixed(1)}:eof_action=pass:enable='between(t,${w.at.toFixed(3)},${(w.at + w.len).toFixed(3)})'[o${vi}]`);
+        // In the overlay, t is output time: clip time = t - at + cut.
+        const OT = `(t-${w.at.toFixed(4)}+${w.cut.toFixed(4)})`;
+        const ox = hasKf(c, 'x') ? `'(W-w)/2+(${kfExpr(kfList(c, 'x'), OT)})'` : `(W-w)/2+${x.toFixed(1)}`;
+        const oy = hasKf(c, 'y') ? `'(H-h)/2+(${kfExpr(kfList(c, 'y'), OT)})'` : `(H-h)/2+${y.toFixed(1)}`;
+        filters.push(`[${base}][${lbl}]overlay=x=${ox}:y=${oy}:eof_action=pass:enable='between(t,${w.at.toFixed(3)},${(w.at + w.len).toFixed(3)})'[o${vi}]`);
         base = `o${vi}`;
         vi++;
       }
       // The clip's own sound.
       if (!still && o.container !== 'gif' && isVideo && p.a.has_audio && !c.mute && !track.mute && num(c.volume, 1) > 0) {
         const aidx = idx !== null && !audioOnly ? idx : addInput(['-ss', w.srcIn.toFixed(3), '-t', (w.len * w.speed + 0.1).toFixed(3), '-i', p.file]);
-        audioLabels.push(audioChain(`[${aidx}:a]`, c, w, num(track.volume, 1), filters, audioLabels.length, 'audio_fade_'));
+        audioLabels.push(audioChain(`[${aidx}:a]`, c, w, track, filters, audioLabels.length, 'audio_fade_'));
       }
     }
   }
   for (const track of still || o.container === 'gif' ? [] : spec.audio || []) {
     if (track.mute) continue;
-    for (const c of track.clips || []) {
+    for (const c of applyTransitions(track.clips || [], true)) {
       const w = window(c);
       if (!w || !c.asset_id || c.mute) continue;
       const p = assetPath(c.asset_id);
       if (!p || !['audio', 'video'].includes(p.a.kind) || p.a.has_audio === 0) continue;
       const idx = addInput(['-ss', w.srcIn.toFixed(3), '-t', (w.len * w.speed + 0.1).toFixed(3), '-i', p.file]);
-      audioLabels.push(audioChain(`[${idx}:a]`, c, w, num(track.volume, 1), filters, audioLabels.length, 'fade_'));
+      audioLabels.push(audioChain(`[${idx}:a]`, c, w, track, filters, audioLabels.length, 'fade_'));
     }
   }
 
@@ -291,12 +388,21 @@ export async function timelineArgs(spec, out, prof) {
   return { args, duration: D };
 }
 
-function audioChain(src, c, w, trackVol, filters, n, fadeKey) {
-  const chain = ['asetpts=PTS-STARTPTS', ...atempo(w.speed), `volume=${(clamp(num(c.volume, 1), 0, 8) * clamp(trackVol, 0, 8)).toFixed(3)}`];
+function audioChain(src, c, w, track, filters, n, fadeKey) {
+  const trackVol = clamp(num(track.volume, 1), 0, 8);
+  const chain = ['asetpts=PTS-STARTPTS', ...atempo(w.speed)];
+  // Volume keyframes multiply with the track volume; t here is time from the visible window's start.
+  if (hasKf(c, 'volume')) chain.push(`volume='${trackVol.toFixed(3)}*max(0,${kfExpr(kfList(c, 'volume'), `(t+${w.cut.toFixed(4)})`)})':eval=frame`);
+  else chain.push(`volume=${(clamp(num(c.volume, 1), 0, 8) * trackVol).toFixed(3)}`);
   const fi = num(c[`${fadeKey}in`] ?? c.fade_in); const fo = num(c[`${fadeKey}out`] ?? c.fade_out);
   if (fi > 0 && w.cut < fi) chain.push(`afade=t=in:st=${Math.max(0, -w.cut).toFixed(3)}:d=${(fi - w.cut).toFixed(3)}`);
   if (fo > 0) chain.push(`afade=t=out:st=${Math.max(0, w.dur - fo - w.cut).toFixed(3)}:d=${fo.toFixed(3)}`);
-  chain.push(`atrim=0:${w.len.toFixed(3)}`, 'aresample=48000', 'aformat=channel_layouts=stereo', `adelay=${Math.round(w.at * 1000)}:all=1`);
+  // Crossfades: equal-power curves over the overlap.
+  if (c._xin && w.cut < c._xin) chain.push(`afade=t=in:st=${Math.max(0, -w.cut).toFixed(3)}:d=${(c._xin - w.cut).toFixed(3)}:curve=qsin`);
+  if (c._xout) chain.push(`afade=t=out:st=${Math.max(0, w.dur - c._xout - w.cut).toFixed(3)}:d=${c._xout.toFixed(3)}:curve=qsin`);
+  chain.push(`atrim=0:${w.len.toFixed(3)}`, 'aresample=48000', 'aformat=channel_layouts=stereo');
+  for (const p of [panFilter(c.pan), panFilter(track.pan)]) if (p) chain.push(p);
+  chain.push(`adelay=${Math.round(w.at * 1000)}:all=1`);
   filters.push(`${src}${chain.join(',')}[a${n}]`);
   return `a${n}`;
 }

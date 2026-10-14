@@ -98,7 +98,7 @@ function CloudFolderDialog({ title, name, confirm, done }) {
   const [selected, setSelected] = useState([]);
   return (
     <Modal title={title} onClose={() => done(null)} width={620}
-      footer={<><Button variant="ghost" onClick={() => done(null)}>Cancel</Button><Button variant="primary" disabled={!n.trim()} onClick={() => done({ folder_id: folder, name: n.trim() })}>{confirm}</Button></>}>
+      footer={<><Button variant="ghost" onClick={() => done(null)}>Cancel</Button><Button variant="primary" disabled={n !== null && !n.trim()} onClick={() => done({ folder_id: folder, name: n?.trim() ?? null })}>{confirm}</Button></>}>
       {name !== null && <label className="block mb-3"><span className="text-xs text-fg2 block mb-1">File name</span><TextInput value={n} onChange={(e) => setN(e.target.value)} /></label>}
       <CloudBrowser mode="folder" folder={folder} setFolder={setFolder} selected={selected} setSelected={setSelected} onPick={() => {}} />
     </Modal>
@@ -155,8 +155,10 @@ function AssetDialog({ title, kinds, multiple, docId, done }) {
   };
   const fromFiles = async () => {
     // Files already in SoraLab are linked to this project so people it's shared with can see them.
-    if (docId) for (const a of selected) if (!a.doc_id) await api.patch(`/api/assets/${a.id}`, { keep: true }).catch(() => {});
-    done(selected);
+    // (keep: deleting the project later won't delete a file that was in Files on its own.)
+    const out = [];
+    for (const a of selected) out.push(docId && !a.doc_id ? await api.patch(`/api/assets/${a.id}`, { doc_id: docId, keep: true }).catch(() => a) : a);
+    done(out);
   };
   return (
     <Modal title={title} onClose={() => done(null)} width={680}
