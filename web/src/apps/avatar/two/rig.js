@@ -99,7 +99,7 @@ export function autoRig(input) {
     const yc = eb[1] + eb[3] * 0.66; // where the lids meet
     const P = `ParamEye${side}Open`;
     // closing squashes the white and iris onto the lid line (the iris is clipped by the white, so it vanishes with it)
-    const close = (p) => bind(p, [P], { [formKey([0])]: { v: r2(meshForm(p, (x, y) => [0, (yc - y) * 0.97])) } });
+    const close = (p) => bind(p, [P], { [formKey([0])]: { v: r2(meshForm(p, (x, y) => [0, yc - y])) } });
     if (white) close(white);
     for (const p of iris) close(p);
     for (const p of lash) { const bot = p.y + p.h; bind(p, [P], { [formKey([0])]: { v: r2(meshForm(p, (x, y) => [0, yc + (y - bot) * 0.5 + p.h * 0.15 - y])) } }); }
