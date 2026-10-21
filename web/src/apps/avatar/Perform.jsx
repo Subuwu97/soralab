@@ -43,7 +43,8 @@ export default function Perform({ project, h, doc, canEdit, ui }) {
   const lastPose = useRef({});
 
   // ---------------------------------------------------------------- the stage (re-made when the model changes)
-  const kindDocKey = doc.kind === '2d' ? null : JSON.stringify({ k: doc.kind, m: doc.model || doc.vrm || doc.asset || null });
+  // a Live2D stage is re-made when its model changes; the 2D and 3D stages take document updates in place (setDoc)
+  const kindDocKey = doc.kind === 'live2d' ? JSON.stringify(doc.model || null) : doc.kind;
   useEffect(() => {
     let off = false; let made = null;
     setStageErr(null);
@@ -52,8 +53,7 @@ export default function Perform({ project, h, doc, canEdit, ui }) {
       .catch((e) => { if (!off) setStageErr(e); });
     return () => { off = true; made?.dispose(); if (stage.current === made) stage.current = null; };
   }, [kindDocKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  // the 2D rig updates in place
-  useEffect(() => { if (doc.kind === '2d') { stage.current?.setDoc?.(doc); setExprList(stage.current?.expressions?.() || []); } }, [doc]);
+  useEffect(() => { if (doc.kind !== 'live2d') { stage.current?.setDoc?.(doc); setExprList(stage.current?.expressions?.() || []); } }, [doc]);
   useEffect(() => { stage.current?.setBackground(bgCss(perform.bg)); stage.current?.setFraming?.(perform.framing); }, [perform.bg, perform.framing]);
   const fit = () => { const s = stage.current; if (!s || !box.current) return; const r = box.current.getBoundingClientRect(); s.resize(Math.round(r.width * devicePixelRatio), Math.round(r.height * devicePixelRatio)); };
   useEffect(fit, [size.width, size.height]);
@@ -171,7 +171,8 @@ export default function Perform({ project, h, doc, canEdit, ui }) {
   };
 
   // ---------------------------------------------------------------- slots
-  useEffect(() => { ui.set({ menus: [], fileItems: [], exportConfig: null, thumb: async () => stage.current?.snapshot() }); });
+  // (3D projects keep the thumbnail their editor saves)
+  useEffect(() => { ui.set({ menus: [], fileItems: [], exportConfig: null, thumb: doc.kind === '3d' ? null : async () => stage.current?.snapshot() }); });
   const camOn = status.camera !== 'off' && status.camera !== 'error';
   const bgMode = perform.bg.mode;
   const options = (

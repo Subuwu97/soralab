@@ -1,6 +1,6 @@
 // One way to make a performing stage for any kind of avatar (see contract.js): the 2D rig, a Live2D model, or the
-// 3D side (./three/, built separately — until it's there, 3D projects say "3D is coming").
-// The 3D module is found with import.meta.glob so the app builds whether or not ./three/index.jsx exists yet.
+// 3D side (./three/, built separately). It's found with import.meta.glob, so the app still builds (and 3D projects
+// say "3D is coming") on a checkout without ./three/index.jsx.
 const THREE = import.meta.glob('./three/index.jsx');
 const THREE_KEY = './three/index.jsx';
 
