@@ -1,7 +1,7 @@
 // Routes. Editors live in src/apps/<id>/index.jsx (default export: the editor, given the project id) and are
 // loaded only when opened. Pages without an editor yet show a friendly placeholder.
 import { lazy, Suspense, useMemo } from 'react';
-import { Routes, Route, useParams, Navigate } from 'react-router-dom';
+import { Routes, Route, useParams, Navigate, useLocation } from 'react-router-dom';
 import { useApp } from './lib/app.jsx';
 import { appById } from './lib/apps.js';
 import { MenuHost, DialogHost, Toaster, Spinner } from './components/ui.jsx';
@@ -12,6 +12,7 @@ import SignIn from './pages/SignIn.jsx';
 
 const EDITORS = import.meta.glob('./apps/*/index.jsx');
 const PAGES = import.meta.glob('./pages/{Files,Libraries,Fonts,Color,Admin,Encoder}.jsx');
+const AVATAR_OUTPUT = import.meta.glob('./apps/avatar/Output.jsx'); // Sora Ningyō's OBS page (no sign-in: it uses the link's key)
 const lazyCache = {};
 const lazyFrom = (map, key) => (map[key] ? (lazyCache[key] ||= lazy(map[key])) : null);
 
@@ -40,6 +41,9 @@ function AppRoute() {
 
 export default function App() {
   const { me } = useApp();
+  const { pathname } = useLocation();
+  const Output = /^\/avatar\/[^/]+\/output\/?$/.test(pathname) && lazyFrom(AVATAR_OUTPUT, './apps/avatar/Output.jsx');
+  if (Output) return <Suspense fallback={null}><Output /></Suspense>;
   return (
     <>
       {me === undefined ? <Loading /> : me === null ? <SignIn /> : (

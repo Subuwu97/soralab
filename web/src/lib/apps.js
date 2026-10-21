@@ -62,6 +62,11 @@ export const APPS = [
     unit: 'px', presets: [P('1080p 24 fps', 1920, 1080, { fps: 24 }), P('720p 24 fps', 1280, 720, { fps: 24 }), P('Square 12 fps', 1080, 1080, { fps: 12 }), P('Sticker 512', 512, 512, { fps: 12 })],
   },
   {
+    id: 'avatar', name: 'Sora Ningyō', kana: 'ソラニンギョウ', role: 'VTuber avatars', letters: 'Ng', like: 'Live2D Cubism / VRoid', doc: true, colors: ['#2a0c33', '#ff8fd8'],
+    tagline: 'Rig a 2D avatar from a PSD, set up a 3D VRM, or play a Live2D model, then perform it live with your webcam.',
+    unit: 'px', presets: [P('2D avatar (from a PSD)', 2048, 2048, { kind: '2d' }), P('3D avatar (VRM)', 1920, 1080, { kind: '3d' }), P('Open a Live2D model', 1920, 1080, { kind: 'live2d' })],
+  },
+  {
     id: 'audio', name: 'Sora Audio', role: 'Audio editing', letters: 'Au', like: 'Audition', doc: true, colors: ['#00262a', '#00e4bb'],
     tagline: 'Record, edit, mix and clean up sound: podcasts, voice-overs and music.',
     presets: [{ label: 'Multitrack 48 kHz', sampleRate: 48000 }, { label: 'Multitrack 44.1 kHz', sampleRate: 44100 }, { label: 'Podcast (voice)', sampleRate: 48000, template: 'podcast' }],
@@ -73,7 +78,7 @@ export const APPS = [
 ];
 
 // The eight apps on the brand sheet first, in its order.
-const ORDER = ['photo', 'vector', 'cut', 'motion', 'develop', 'proto', 'layout', 'animate', 'paint', 'express', 'pdf', 'audio', 'encoder'];
+const ORDER = ['photo', 'vector', 'cut', 'motion', 'develop', 'proto', 'layout', 'animate', 'avatar', 'paint', 'express', 'pdf', 'audio', 'encoder'];
 APPS.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
 
 export const TOOLS = [

@@ -12,6 +12,7 @@ SoraLab (空, "sky") is a set of creative apps that run in the browser on your o
 | **Sora Eizō** | Video editing: multitrack timeline, trimming tools, titles, transitions, keyframes, colour, audio mixing | Premiere Pro |
 | **Sora Ugoki** | Motion graphics: keyframes with easing and expressions, shapes with trim paths, text animators, track mattes, templates | After Effects |
 | **Sora ANI** | Animation: frame-by-frame drawing, onion skin, classic and shape tweens, symbols | Animate |
+| **Sora Ningyō** | VTuber avatars: rig a 2D avatar from a PSD, set up a 3D VRM, or play a Live2D model, then perform it live with your webcam and stream it to OBS | Live2D Cubism / VRoid |
 | **Sora Keishiki** | Layout/publishing: pages, parent pages, threaded text frames, paragraph and character styles, text wrap | InDesign |
 | **Sora UI/UX** | Interface design: device screens, components, repeat grids, clickable prototypes with a shareable preview | XD |
 | **Sora Paint** | Digital painting: pressure-sensitive brushes, smudge, symmetry, canvas rotation, time-lapse | Fresco |
@@ -37,6 +38,31 @@ Around them:
   - Image, vector, layout and PDF exports are made in your browser.
   - Video, audio and conversions are rendered on the server with ffmpeg. They use the same GPU detection as Tsunami (NVIDIA NVENC, Intel Quick Sync, AMD AMF, VA-API on Linux, Apple VideoToolbox), and fall back to the CPU if the GPU fails partway.
 - **Notifications:** finished renders and shares show up in the suite's notification bell.
+
+## Sora Ningyō (VTuber avatars)
+
+Sora Ningyō (人形, "puppet") makes and performs VTuber avatars. New projects start as one of three kinds:
+
+- **2D avatar (from a PSD):** SoraLab's own open rig, in the style of Live2D Cubism.
+  - Import a layered PSD (or loose PNGs): every layer becomes a part in place, PSD groups become part groups, clipping layers become clipping masks. Layer names like "Eye L white", "Iris R", "Mouth upper" or 前髪 are recognised, and a checklist shows which face parts are still missing.
+  - Separate layers: split a part with the lasso, auto-crop, and "fill behind" (paint where hidden colour is needed, e.g. skin under the hair; the edge colours grow into it).
+  - Meshes are made automatically from each part's outline (adjustable density). Add, move, delete and pin vertices.
+  - Warp (grid) and rotation deformers in a hierarchy, and parameters (ParamAngleX/Y/Z, ParamEyeLOpen, ParamMouthOpenY, ParamBreath…) with keyforms: at each key value, record vertex and deformer positions, opacity and draw order. Up to two parameters combine in a grid, like Cubism. Mirror a keyform to the opposite key, or copy it to the part on the other side.
+  - **Auto-rig face** sets up head angles, blinking, eyeballs, brows, mouth open and smile, breathing and hair sway as a starting point.
+  - Pendulum physics for hair and accessories, expressions (sets of parameter overrides), and the tracking → parameter table.
+  - Export a PNG, a `.sora-avatar` file (the rig as JSON plus PNG textures, zipped), or an Inochi2D puppet (`.inp`; deformers are baked into per-key mesh offsets, physics and expressions aren't carried over). Live2D's own `.moc3`/`.cmo3` formats are proprietary, so SoraLab can't write them.
+- **Open a Live2D model:** import a Cubism model (a zip of its folder, or its `.model3.json`, `.moc3`, textures, motions, expressions and physics). It plays with its own physics, expressions and idle motion, and tracking drives the standard Cubism parameters.
+  - Live2D's **Cubism Core** (`live2dcubismcore.min.js`) can't be included with SoraLab. A server admin downloads the Cubism SDK for Web from Live2D, accepts its licence, and uploads `Core/live2dcubismcore.min.js` once from any Live2D project. It is stored on the server (`data/avatar/`) and served only to signed-in people and to OBS output links.
+- **3D avatar (VRM):** the 3D side lives in `web/src/apps/avatar/three/` (VRM import, expressions, spring bones, materials).
+
+**Perform** mode works the same for every kind:
+- Webcam face tracking in the browser with MediaPipe Face Landmarker (blendshapes and head pose), in a background worker; optional hand tracking. Nothing leaves your computer.
+- "Set neutral" calibration; per value sensitivity, dead zone, range, invert and smoothing (One Euro filter), all saved with the project. Breathing is added automatically.
+- No camera? A mouse/keyboard puppet (the mouse moves the head and eyes, hold the button to talk, B blinks), and mic lip-sync (loudness opens the mouth, vowel shapes from the voice).
+- Expression hotkeys (toggle or hold), a background colour, chroma green or transparent, PNG snapshots and WebM recording (with transparency).
+- **OBS:** copy the output link into an OBS *Browser Source*. The page has a transparent background and follows the Perform page live through a small WebSocket relay on the SoraLab server (about 30 poses a second, rate-limited). The link holds a random key, which the owner can reset; it needs no sign-in. "Pop-out window" opens the same view in a window for *Window Capture*.
+
+The face and hand models (`web/public/models/`, Apache 2.0, about 11.5 MB) and the MediaPipe runtime come with SoraLab, so tracking works on a home network without internet. See `web/public/models/NOTICE.txt`.
 
 ## With the Mirai suite (recommended)
 

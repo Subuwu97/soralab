@@ -12,6 +12,7 @@ import { libraries } from './api/libraries.js';
 import { suite, cloudEnabled, tsunamiEnabled } from './api/suite.js';
 import { jobs, resumeJobs } from './api/jobs.js';
 import { admin } from './api/admin.js';
+import { avatar, attachRelay } from './api/avatar.js';
 import { errorHandler } from './api/util.js';
 import { notifier } from './notify.js';
 import { warmUp } from './hwaccel.js';
@@ -40,7 +41,7 @@ app.get('/api/suite-image', suiteImageRoute);
 app.use('/api/notifications', express.json());
 notifier.routes(app, { subOf: (req) => req.user?.id || null, prefix: '/api' });
 app.use('/api/admin', admin);
-for (const r of [docs, assets, libraries, suite, jobs]) app.use('/api', r);
+for (const r of [docs, assets, libraries, suite, jobs, avatar]) app.use('/api', r);
 app.use('/api', (req, res) => res.status(404).json({ error: 'not_found', message: 'Unknown API endpoint.' }));
 app.use(errorHandler);
 
@@ -51,10 +52,11 @@ if (fs.existsSync(path.join(config.webDist, 'index.html'))) {
   app.get('/', (req, res) => res.type('text').send('SoraLab API is running. Build the web app (npm run build).'));
 }
 
-secure.listen(app);
-app.listen(config.port, config.host, () => {
+// Sora Ningyō's pose relay (WebSocket) rides on both the plain and the HTTPS server.
+attachRelay(secure.listen(app));
+attachRelay(app.listen(config.port, config.host, () => {
   console.log(`[soralab] ${config.publicUrl} (listening ${config.host}:${config.port}) — accounts: ${config.accountsUrl}`);
   warmUp();
   resumeWebCopies();
   resumeJobs();
-});
+}));

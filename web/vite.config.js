@@ -14,6 +14,6 @@ export default defineConfig({
   worker: { format: 'es' },
   server: {
     port: 5180, host: true, fs: { allow: ['..'] },
-    proxy: { '/api': { target }, '/auth': { target } },
+    proxy: { '/api': { target, ws: true }, '/auth': { target } }, // ws: Sora Ningyō's pose relay
   },
 });

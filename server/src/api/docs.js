@@ -12,7 +12,7 @@ import { viaSecure } from '../suite-images.js';
 export const docs = express.Router();
 docs.use('/docs', requireUser);
 
-export const APPS = ['photo', 'paint', 'develop', 'vector', 'express', 'proto', 'layout', 'pdf', 'cut', 'motion', 'animate', 'audio'];
+export const APPS = ['photo', 'paint', 'develop', 'vector', 'express', 'proto', 'layout', 'pdf', 'cut', 'motion', 'animate', 'audio', 'avatar'];
 const AUTOSAVE_VERSION_EVERY = 10 * 60e3; // a restorable version at most every 10 minutes while you work
 
 export function docOut(d, user) {
