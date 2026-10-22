@@ -35,7 +35,8 @@ const FINGERS = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16], 
 export const GESTURES = ['open', 'fist', 'peace', 'thumbsUp', 'point', 'wave'];
 export const GESTURE_LABELS = { open: 'Open hand', fist: 'Fist', peace: 'Peace sign', thumbsUp: 'Thumbs up', point: 'Pointing', wave: 'Wave' };
 
-const HOLD = 0.3;          // seconds a lost hand keeps its last pose (the detector drops frames during fast moves)
+const HOLD = 0.3;          // seconds a lost hand keeps its last pose (the detector drops frames during fast moves);
+                           // longer when tracking results come slowly (a busy CPU): 2.5 result intervals
 const FADE_IN = 10;        // 1/s
 const FADE_OUT = 3;        // 1/s: about 0.7 s back to rest
 const SETTLE = 0.12;       // seconds a new gesture must hold before it counts
@@ -69,7 +70,8 @@ export function classify(curl, thumbDir) {
   const fingersFolded = folded(1) && folded(2) && folded(3) && folded(4);
   if (fingersFolded && curl[0] < 0.45 && thumbDir[1] > 0.55) return 'thumbsUp';
   if (fingersFolded) return 'fist';
-  if (ext(1) && ext(2) && ext(3) && ext(4)) return 'open';
+  // (the little finger rarely straightens all the way in an open hand)
+  if (ext(1) && ext(2) && ext(3) && curl[4] < 0.6) return 'open';
   if (ext(1) && ext(2) && folded(3) && folded(4)) return 'peace';
   if (ext(1) && folded(2) && folded(3) && folded(4)) return 'point';
   return 'none';
@@ -102,7 +104,9 @@ export function arm2D(side, x, y, fingerDir) {
 const blankTrack = () => ({ seenAt: -1e9, vis: 0, v: null, gesture: 'none', cand: 'none', candAt: 0, gw: Object.fromEntries(GESTURES.map((g) => [g, 0])), wave: { ext: null, dir: 0, flips: [], until: -1, extR: null, dirR: 0 }, filters: new FilterBank() });
 
 export class HandShaper {
-  constructor() { this.tracks = { L: blankTrack(), R: blankTrack() }; this.ref = null; this.lastT = null; this.raw = []; }
+  constructor() { this.tracks = { L: blankTrack(), R: blankTrack() }; this.ref = null; this.lastT = null; this.raw = []; this.gap = 1 / 30; this.updT = null; }
+  /** How long a lost hand holds: longer when results arrive slowly. */
+  get hold() { return Math.max(HOLD, Math.min(1.5, this.gap * 2.5)); }
   reset() { this.tracks = { L: blankTrack(), R: blankTrack() }; this.raw = []; }
 
   /** The face as the reference frame: centre, width (in image-height units) and distance (cm). Kept when the face is lost. */
@@ -127,6 +131,8 @@ export class HandShaper {
    */
   update(hands, ctx, s, t) {
     const aspect = ctx.size?.[0] && ctx.size?.[1] ? ctx.size[0] / ctx.size[1] : 4 / 3;
+    if (this.updT !== null) this.gap += (Math.min(2, Math.max(0, t - this.updT)) - this.gap) * 0.2;
+    this.updT = t;
     this.setFace(ctx.landmarks, aspect, ctx.faceZ);
     const minScore = s.handConfidence ?? 0.5;
     const list = (hands || []).filter((h) => h?.pts?.length === 21 && (h.score ?? 1) >= minScore);
@@ -171,7 +177,7 @@ export class HandShaper {
     const raw = { x: clamp(mx * relX, -1.6, 1.6), y: clamp(-relY, -1.6, 1.6), z, F, T, curl, spread, thumbDir };
 
     // smoothing: the same One Euro filters as the face; a hand that comes back starts fresh
-    if (t - tr.seenAt > HOLD + 0.5) tr.filters.reset();
+    if (t - tr.seenAt > this.hold + 0.5) tr.filters.reset();
     const sm = Math.max(0.1, s.handSmooth ?? 1.5);
     const mc = (s.smoothing?.minCutoff ?? 1.6) / sm; const beta = s.smoothing?.beta ?? 0.4;
     const f = (k, v, k2 = 1) => tr.filters.run(k, v, t, mc / k2, beta);
@@ -216,7 +222,7 @@ export class HandShaper {
     const out = {};
     for (const side of ['L', 'R']) {
       const tr = this.tracks[side];
-      const seen = t - tr.seenAt < HOLD && tr.v;
+      const seen = t - tr.seenAt < this.hold && tr.v;
       tr.vis += ((seen ? 1 : 0) - tr.vis) * (1 - Math.exp(-dt * (seen ? FADE_IN : FADE_OUT)));
       if (tr.vis < 0.002 && !seen) tr.vis = 0;
       const gesture = !tr.v || tr.vis < 0.5 ? 'none' : t < tr.wave.until ? 'wave' : tr.gesture;

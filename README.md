@@ -60,7 +60,12 @@ Sora Ningyō (人形, "puppet") makes and performs VTuber avatars. New projects 
   - Meshes are made automatically from each part's outline (adjustable density). Add, move, delete and pin vertices.
   - Warp (grid) and rotation deformers in a hierarchy, and parameters (ParamAngleX/Y/Z, ParamEyeLOpen, ParamMouthOpenY, ParamBreath…) with keyforms: at each key value, record vertex and deformer positions, opacity and draw order. Up to two parameters combine in a grid, like Cubism. Mirror a keyform to the opposite key, or copy it to the part on the other side.
   - **Auto-rig face** sets up head angles, blinking, eyeballs, brows, mouth open and smile, breathing and hair sway as a starting point.
-  - Pendulum physics for hair and accessories, expressions (sets of parameter overrides), and the tracking → parameter table.
+    If there are layers named for arms and hands ("Upper arm L", "Forearm R", "Hand L", 腕, 手…, also in the checklist), it adds
+    rotation deformers at the shoulder, elbow and wrist on the arm parameters (ParamArmLA/RA upper arm, ParamArmLB/RB forearm,
+    ParamHandL/R wrist). Hand layers named for a gesture ("Hand L peace", "fist", "point", "thumb") swap in while that gesture is seen.
+  - Pendulum physics for hair and accessories, expressions (sets of parameter overrides), and the tracking → parameter table. Hand
+    tracking adds rows for the arm angles, wrist, hand closed, peace / point / thumbs-up weights and hand X/Y (ParamHandLX/LY…);
+    they read 0 when a hand isn't seen.
   - Export a PNG, a `.sora-avatar` file (the rig as JSON plus PNG textures, zipped), or an Inochi2D puppet (`.inp`; deformers are baked into per-key mesh offsets, physics and expressions aren't carried over). Live2D's own `.moc3`/`.cmo3` formats are proprietary, so SoraLab can't write them.
 - **Open a Live2D model:** import a Cubism model (a zip of its folder, or its `.model3.json`, `.moc3`, textures, motions, expressions, pose and physics). Tracking drives the standard Cubism parameters. Playback follows the published behaviour of Live2D's open-source Cubism Framework:
   - **Physics** from `.physics3.json`.
@@ -82,10 +87,20 @@ Sora Ningyō (人形, "puppet") makes and performs VTuber avatars. New projects 
 - **3D avatar (VRM):** a VRM, glTF / GLB or FBX model set up for VTubing (see *3D avatars* below).
 
 **Perform** mode works the same for every kind:
-- Webcam face tracking in the browser with MediaPipe Face Landmarker (blendshapes and head pose), in a background worker; optional hand tracking. Nothing leaves your computer.
+- Webcam face tracking in the browser with MediaPipe Face Landmarker (blendshapes and head pose), in a background worker. Nothing leaves your computer.
+- **Hand tracking** (Sources → "Track hands too"; off by default because it roughly doubles the tracking work) uses MediaPipe Hand
+  Landmarker in the same worker:
+  - Left and right are sorted out (MediaPipe labels hands as if the picture were mirrored), with a confidence threshold and the
+    same One Euro smoothing as the face (plus a "Hand steadiness" setting).
+  - A lost hand holds its pose briefly (longer when tracking runs slowly), then eases back to rest.
+  - Each hand gives its wrist position relative to the shoulders (estimated from the face), wrist rotation, per-finger curl and
+    spread, and a gesture: open, fist, peace, thumbs up, point, or wave (detected over time). The camera preview draws the hands.
+  - 3D avatars reach with their arms, 2D rigs move the arm parameters, and Live2D models can bind the same values.
+- **Gesture triggers:** any expression can be turned on by a gesture of either hand or a chosen hand, while it's shown or as a
+  toggle. Set this next to its hotkey in Perform, or in the 2D / 3D expression panels. It's saved in the project.
 - "Set neutral" calibration; per value sensitivity, dead zone, range, invert and smoothing (One Euro filter), all saved with the project. Breathing is added automatically.
 - No camera? A mouse/keyboard puppet (the mouse moves the head and eyes, hold the button to talk, B blinks), and mic lip-sync (loudness opens the mouth, vowel shapes from the voice).
-- Expression hotkeys (toggle or hold), a background colour, chroma green or transparent, PNG snapshots and WebM recording (with transparency).
+- Expression hotkeys (toggle or hold) and gesture triggers, a background colour, chroma green or transparent, PNG snapshots and WebM recording (with transparency).
 - **OBS:** copy the output link into an OBS *Browser Source*. The page has a transparent background and follows the Perform page live through a small WebSocket relay on the SoraLab server (about 30 poses a second, rate-limited). The link holds a random key, which the owner can reset; it needs no sign-in. "Pop-out window" opens the same view in a window for *Window Capture*.
 
 The face and hand models (`web/public/models/`, Apache 2.0, about 11.5 MB) and the MediaPipe runtime come with SoraLab, so tracking works on a home network without internet. See `web/public/models/NOTICE.txt`.
@@ -98,7 +113,7 @@ into every save. The tabs on the left of the 3D editor are:
 
 - **Model.** Import a model (VRM 0.x or 1.0, glTF / GLB or FBX), or choose one from Files. For a .gltf or .fbx with separate textures,
   pick the model and its texture files together. You can also start from the **starter avatar**, a simple stylised figure built in code.
-  It has a skeleton, blink and mouth shapes, emotions and spring-bone hair, and you can change its colours and hair length. FBX files
+  It has a skeleton (with finger bones), blink and mouth shapes, emotions and spring-bone hair, and you can change its colours and hair length. FBX files
   in centimetres are scaled to a person's height automatically. VRM 0.x models are turned to face forward, as in VRM 1.0.
 - **Rig & bones.**
   - *Humanoid bones:* a table maps the VRM humanoid bones to the model's bones. Auto-map reads Mixamo, VRoid, Blender / Rigify, Unity
@@ -136,7 +151,11 @@ into every save. The tabs on the left of the 3D editor are:
   - When tracking is lost, the avatar breathes, sways and blinks on its own.
   - **Try a pose** has sliders for testing without a camera.
   - These settings are saved in the project as `doc.drive`. The tracker's own per-key tuning and mirroring stay in `doc.tracking`.
-  - Hands aren't driven yet.
+  - **Hands and arms:** with hand tracking on, a two-bone IK moves the upper arm and forearm so the wrist reaches the tracked
+    position. Elbows point down, a little out and back, and hands are kept out of the torso and head. Wrists turn (within a
+    wrist's range), and finger bones curl and spread on models that have them; the starter avatar has finger bones. A lost hand
+    eases back to the relaxed arms-down idle pose. *Reach* and *Finger curl* sliders, and test hands (open, fist, peace,
+    thumbs up, point, wave) in *Try a pose*.
 - **Stage camera.** Face, bust-up, waist-up, full body, or the current view, with zoom, offset, turn and lens. Perform and the OBS output
   use this framing, with Perform's own zoom on top.
 - **Info & licence.** The VRM 1.0 meta: name, authors, version, copyright, contact, references, and the licence choices (avatar use,

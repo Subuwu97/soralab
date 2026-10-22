@@ -245,7 +245,7 @@ export default function Editor({ project, history: h, canEdit = project?.canEdit
       out.root.traverse((o) => o.geometry?.dispose());
       const cur = live.current.doc;
       const base = (cur.model.fileName || 'Avatar').replace(/\.[^.]+$/, '').replace(/ \(rigged\)$/, '');
-      const asset = await saveBlob(new Blob([buf], { type: 'model/gltf-binary' }), `${base} (rigged).glb`, { docId, isExport: false });
+      const asset = await saveBlob(new Blob([buf], { type: 'model/gltf-binary' }), `${base} (rigged).glb`, { docId, isExport: false, autosave: true }); // replaced by the next re-rig / paint
       eng.current.framed = false;
       h.set({ ...cur, model: { asset: asset.id, format: 'glb', fileName: asset.name, files: {}, scale: 1, rigged: 'auto', source: cur.model.source || cur.model },
         humanoid: { bones: out.humanoid }, autorig: { markers: r.markers, smooth: r.smooth } }, 'Auto-rig');
@@ -285,7 +285,7 @@ export default function Editor({ project, history: h, canEdit = project?.canEdit
         const buf = await exportGLTF(a, { binary: true });
         const cur = live.current.doc;
         const base = (cur.model.fileName || 'Avatar').replace(/\.[^.]+$/, '').replace(/ \((rigged|weights)\)$/, '');
-        const asset = await saveBlob(new Blob([buf], { type: 'model/gltf-binary' }), `${base} (weights).glb`, { docId, isExport: false });
+        const asset = await saveBlob(new Blob([buf], { type: 'model/gltf-binary' }), `${base} (weights).glb`, { docId, isExport: false, autosave: true }); // replaced by the next paint
         // The saved file carries the scale and VRM 0.x turn already, and the document has every VRM setting.
         h.set({ ...cur, model: { asset: asset.id, format: 'glb', fileName: asset.name, files: {}, scale: 1, rigged: cur.model.rigged || 'painted', source: cur.model.source || cur.model } }, 'Paint weights');
       } catch (e) { toastError(e, 'Couldn’t save the weights'); setLoading(null); }

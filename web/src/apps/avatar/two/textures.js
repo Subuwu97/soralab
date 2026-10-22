@@ -35,7 +35,7 @@ export async function saveTex(imageData, name, docId) {
   const c = new OffscreenCanvas(imageData.width, imageData.height);
   c.getContext('2d').putImageData(imageData, 0, 0);
   const blob = await c.convertToBlob({ type: 'image/png' });
-  const a = await saveBlob(blob, `${name || 'part'}.png`, { docId, isExport: false });
+  const a = await saveBlob(blob, `${name || 'part'}.png`, { docId, isExport: false, autosave: true }); // a working copy: a later edit replaces it
   putTex(a.id, await createImageBitmap(c, { premultiplyAlpha: 'premultiply' }), imageData);
   return a.id;
 }

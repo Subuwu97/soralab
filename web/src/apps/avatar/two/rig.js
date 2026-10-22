@@ -81,11 +81,8 @@ export function autoRig(input) {
 
   // parenting
   const faceIds = new Set(faceParts.map((p) => p.id));
-  const armOf = new Map(doc.deformers.filter((d) => d.auto && d.armParts).flatMap((d) => d.armParts.map((id) => [id, d.id])));
-  for (const d of doc.deformers) delete d.armParts;
   doc.parts = doc.parts.map((p) => {
     if (faceIds.has(p.id)) return { ...p, parent: faceW.id };
-    if (armOf.has(p.id)) return { ...p, parent: armOf.get(p.id) };
     if (hairW && p.role === 'hairBack') return { ...p, parent: hairW.id };
     if (!p.parent) return { ...p, parent: p.role === 'neck' || p.role === 'body' || !p.role ? body.id : head.id };
     return p;
@@ -181,6 +178,10 @@ function arms(doc, by, body, report, bind) {
       const wrist = { id: uid('d'), name: `Hand ${S} (wrist)`, type: 'rotation', auto: true, parent, pivot: topMid(hb, 0.15), opacity: 1, kf: [rot(`ParamHand${S}`, -80, 80)], armParts: hands.map((p) => p.id) };
       made.push(wrist);
     } else made[made.length - 1].armParts.push(...hands.map((p) => p.id));
+    // the arm's parts hang from its deformers (arms() runs after the face parenting, so this wins)
+    const armOf = new Map(made.flatMap((d) => d.armParts.map((id) => [id, d.id])));
+    for (const d of made) delete d.armParts;
+    doc.parts = doc.parts.map((p) => (armOf.has(p.id) ? { ...p, parent: armOf.get(p.id) } : p));
     doc.deformers.push(...made);
     // gesture hands: a variant shows at its gesture's weight and hides the plain hand
     const variants = hands.map((p) => [p, HAND_VARIANTS.find(([, re]) => re.test(p.name))?.[0]]);
