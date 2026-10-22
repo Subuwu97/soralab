@@ -15,6 +15,11 @@ export function splitColor(col) {
   return { c: `#${h(p.r)}${h(p.g)}${h(p.b)}`, a: p.a ?? 1 };
 }
 
+// Saved documents can come from anyone (shared projects, imported .sora files): every value that lands in an SVG
+// attribute is escaped or checked against a list, so a crafted file can't add markup to the page.
+const sid = (v) => String(v).replace(/[^\w-]/g, '_');
+const CAPS = ['butt', 'round', 'square'];
+const JOINS = ['miter', 'round', 'bevel'];
 export const BLENDS = ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'color-burn', 'hard-light', 'soft-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity'];
 
 function gradientDef(id, f) {
@@ -34,8 +39,8 @@ function strokeAttrs(st, widthMul = 1) {
   const { c, a } = splitColor(st.color);
   let s = ` stroke="${c}" stroke-width="${n2(st.width * widthMul)}"`;
   if (a < 1) s += ` stroke-opacity="${n2(a)}"`;
-  if (st.cap && st.cap !== 'butt') s += ` stroke-linecap="${st.cap}"`;
-  if (st.join && st.join !== 'miter') s += ` stroke-linejoin="${st.join}"`;
+  if (st.cap && st.cap !== 'butt' && CAPS.includes(st.cap)) s += ` stroke-linecap="${st.cap}"`;
+  if (st.join && st.join !== 'miter' && JOINS.includes(st.join)) s += ` stroke-linejoin="${st.join}"`;
   if (st.dash?.length) s += ` stroke-dasharray="${st.dash.map(n2).join(' ')}"`;
   return s;
 }
@@ -71,7 +76,7 @@ function textMarkup(n, ctx, tr, extra) {
   const f = fontOf(n);
   const fontAttrs = ` font-family="${esc(f.family)}" font-size="${n2(f.size)}"${f.weight !== 400 ? ` font-weight="${f.weight}"` : ''}${f.style === 'italic' ? ' font-style="italic"' : ''}${f.tracking ? ` letter-spacing="${n2((f.tracking * f.size) / 1000)}"` : ''}`;
   if (n.mode === 'path') {
-    const pid = `${ctx.prefix}tp-${n.id}`;
+    const pid = `${ctx.prefix}tp-${sid(n.id)}`;
     return `<path id="${pid}" d="${esc(n.pathD || '')}" fill="none" stroke="none"${tr}/><text${fontAttrs}${extra} xml:space="preserve"><textPath href="#${pid}" startOffset="${n2(n.startOffset || 0)}%">${esc(n.text)}</textPath></text>`;
   }
   const L = layoutText(n);
@@ -81,7 +86,7 @@ function textMarkup(n, ctx, tr, extra) {
 
 /** Fill + stroke of a leaf honouring stroke alignment (inside/outside need a clip or mask). */
 function paintLeaf(n, ctx) {
-  const pid = `${ctx.prefix}${n.id}`;
+  const pid = `${ctx.prefix}${sid(n.id)}`;
   if (n.type === 'image') {
     const tr = isIdentity(n.t) ? '' : ` transform="${matStr(n.t)}"`;
     const href = ctx.assetUrl ? ctx.assetUrl(n.asset) : '';
@@ -111,12 +116,12 @@ function paintLeaf(n, ctx) {
 
 /** Wrapper attributes shared by every node: id, opacity, blend mode, effects. */
 function wrap(n, ctx, inner) {
-  const pid = `${ctx.prefix}${n.id}`;
+  const pid = `${ctx.prefix}${sid(n.id)}`;
   const fx = filterDef(`${pid}-fx`, n.effects);
   let a = '';
-  if (ctx.ids) a += ` data-id="${n.id}"`;
+  if (ctx.ids) a += ` data-id="${esc(n.id)}"`;
   if (n.opacity !== undefined && n.opacity < 1) a += ` opacity="${n2(n.opacity)}"`;
-  if (n.blend && n.blend !== 'normal') a += ` style="mix-blend-mode:${n.blend}"`;
+  if (n.blend && n.blend !== 'normal' && BLENDS.includes(n.blend)) a += ` style="mix-blend-mode:${n.blend}"`;
   if (fx) a += ` filter="url(#${pid}-fx)"`;
   return `${fx}<g${a}>${inner}</g>`;
 }
@@ -138,28 +143,28 @@ export function renderNode(n, ctx) {
   switch (n.type) {
     case 'artboard': {
       const kids = n.children.map((c) => renderNode(c, ctx)).join('');
-      const cid = `${ctx.prefix}${n.id}-ab`;
-      const bg = n.bg ? (() => { const { c, a } = splitColor(n.bg); return `<rect x="${n2(n.x)}" y="${n2(n.y)}" width="${n2(n.w)}" height="${n2(n.h)}" fill="${c}"${a < 1 ? ` fill-opacity="${n2(a)}"` : ''}${ctx.ids ? ` data-abbg="${n.id}"` : ''}/>`;
-      })() : (ctx.ids ? `<rect x="${n2(n.x)}" y="${n2(n.y)}" width="${n2(n.w)}" height="${n2(n.h)}" fill="transparent" data-abbg="${n.id}"/>` : '');
+      const cid = `${ctx.prefix}${sid(n.id)}-ab`;
+      const bg = n.bg ? (() => { const { c, a } = splitColor(n.bg); return `<rect x="${n2(n.x)}" y="${n2(n.y)}" width="${n2(n.w)}" height="${n2(n.h)}" fill="${c}"${a < 1 ? ` fill-opacity="${n2(a)}"` : ''}${ctx.ids ? ` data-abbg="${esc(n.id)}"` : ''}/>`;
+      })() : (ctx.ids ? `<rect x="${n2(n.x)}" y="${n2(n.y)}" width="${n2(n.w)}" height="${n2(n.h)}" fill="transparent" data-abbg="${esc(n.id)}"/>` : '');
       out = n.clip
-        ? `<g${ctx.ids ? ` data-artboard="${n.id}"` : ''} style="isolation:isolate"><clipPath id="${cid}"><rect x="${n2(n.x)}" y="${n2(n.y)}" width="${n2(n.w)}" height="${n2(n.h)}"/></clipPath>${bg}<g clip-path="url(#${cid})">${kids}</g></g>`
-        : `<g${ctx.ids ? ` data-artboard="${n.id}"` : ''} style="isolation:isolate">${bg}${kids}</g>`;
+        ? `<g${ctx.ids ? ` data-artboard="${esc(n.id)}"` : ''} style="isolation:isolate"><clipPath id="${cid}"><rect x="${n2(n.x)}" y="${n2(n.y)}" width="${n2(n.w)}" height="${n2(n.h)}"/></clipPath>${bg}<g clip-path="url(#${cid})">${kids}</g></g>`
+        : `<g${ctx.ids ? ` data-artboard="${esc(n.id)}"` : ''} style="isolation:isolate">${bg}${kids}</g>`;
       break;
     }
     case 'group': {
       if (n.clip && n.children.length > 1) {
         const mask = n.children[n.children.length - 1];
-        const cid = `${ctx.prefix}${n.id}-clip`;
+        const cid = `${ctx.prefix}${sid(n.id)}-clip`;
         const kids = n.children.slice(0, -1).map((c) => renderNode(c, ctx)).join('');
         // The mask's own stroke (if any) draws on top, like Illustrator.
         const maskStroke = mask.stroke?.color && mask.stroke.width > 0 && !mask.hidden ? geometry(mask, ctx, ` fill="none"${strokeAttrs(mask.stroke)}`) : '';
-        out = wrap(n, ctx, `<clipPath id="${cid}">${clipGeometry(mask, ctx)}</clipPath><g clip-path="url(#${cid})">${kids}</g>${maskStroke}${ctx.ids ? `<g data-id="${mask.id}">${geometry(mask, ctx, ' fill="none" stroke="transparent" stroke-width="8" vector-effect="non-scaling-stroke"')}</g>` : ''}`);
+        out = wrap(n, ctx, `<clipPath id="${cid}">${clipGeometry(mask, ctx)}</clipPath><g clip-path="url(#${cid})">${kids}</g>${maskStroke}${ctx.ids ? `<g data-id="${esc(mask.id)}">${geometry(mask, ctx, ' fill="none" stroke="transparent" stroke-width="8" vector-effect="non-scaling-stroke"')}</g>` : ''}`);
       } else out = wrap(n, ctx, n.children.map((c) => renderNode(c, ctx)).join(''));
       break;
     }
     case 'instance': {
       const sym = ctx.doc?.symbols?.find((s) => s.id === n.symbol);
-      const sub = { ...ctx, ids: false, cache: null, prefix: `${ctx.prefix}${n.id}-`, overrides: n.overrides || {} };
+      const sub = { ...ctx, ids: false, cache: null, prefix: `${ctx.prefix}${sid(n.id)}-`, overrides: n.overrides || {} };
       const inner = sym ? sym.children.map((c) => renderNode(c, sub)).join('') : '';
       out = wrap(n, ctx, `<g${isIdentity(n.t) ? '' : ` transform="${matStr(n.t)}"`}>${inner}${ctx.ids ? hitBox(sym ? null : n) : ''}</g>`);
       break;
@@ -168,7 +173,7 @@ export function renderNode(n, ctx) {
       let inner = '';
       for (let r = 0; r < n.rows; r++) for (let c = 0; c < n.cols; c++) {
         const k = r * n.cols + c;
-        const sub = { ...ctx, ids: false, cache: null, prefix: `${ctx.prefix}${n.id}-${k}-`, overrides: n.texts?.[k] ? Object.fromEntries(Object.entries(n.texts[k]).map(([id, text]) => [id, { text }])) : null };
+        const sub = { ...ctx, ids: false, cache: null, prefix: `${ctx.prefix}${sid(n.id)}-${k}-`, overrides: n.texts?.[k] ? Object.fromEntries(Object.entries(n.texts[k]).map(([id, text]) => [id, { text }])) : null };
         inner += `<g transform="${matStr(translate(c * (n.cell.w + n.gx), r * (n.cell.h + n.gy)))}">${n.cell.children.map((x) => renderNode(x, sub)).join('')}</g>`;
       }
       const tr = isIdentity(n.t) ? '' : ` transform="${matStr(n.t)}"`;
