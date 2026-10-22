@@ -26,7 +26,7 @@ Around them:
 - **Libraries**: colours, gradients, text styles and graphics to reuse across apps.
 - **Fonts**: 14 built-in families, plus fonts you upload.
 - **Color**: harmony rules, colours from photos, a contrast checker and a colour-blindness preview.
-- **Admin**: for Mirai admins. Usage, people, the render encoder and live render jobs.
+- **Admin**: for Mirai admins. Usage, people, the render encoder, live render jobs, the storage cleanup and Live2D's Cubism Core.
 
 ## Working with projects
 
@@ -38,6 +38,17 @@ Around them:
   - Image, vector, layout and PDF exports are made in your browser.
   - Video, audio and conversions are rendered on the server with ffmpeg. They use the same GPU detection as Tsunami (NVIDIA NVENC, Intel Quick Sync, AMD AMF, VA-API on Linux, Apple VideoToolbox), and fall back to the CPU if the GPU fails partway.
 - **Notifications:** finished renders and shares show up in the suite's notification bell.
+- **Storage cleanup:** some editors save their working files as they go. Sora Kōsaku and Sora Paint store each changed layer as a new PNG, Sora Audio keeps each edited take, and Sora Eizō renders its titles to PNGs. The old copies are cleaned up:
+  - A file is removed only when all of these hold:
+    - an editor saved it for itself (marked *autosave*), or it's a project's file from before that marking existed;
+    - it isn't an export, kept in Files, or used by a library item;
+    - no project uses it: not the current contents of any project (anyone's, including shared projects and the trash), nor any kept version of one;
+    - it's older than the grace period (24 hours), counted from when it was made and from the last save that used it, so saves in progress and layers that Undo may bring back are never touched.
+  - It runs a few minutes after the server starts and then every 6 hours, and logs every file it removes.
+  - **Admin** shows the unused storage (files and MB), the last run, and *Clean up now*.
+  - In **Files**, the storage breakdown shows your own unused files and *Free up space*.
+  - API: `GET /api/storage/unused`, `POST /api/storage/cleanup`, and for admins `GET /api/admin/storage` and `POST /api/admin/storage/cleanup`. Send `{ "dry_run": true }` to list what would go without removing anything.
+  - Deleting a project for good keeps the files that another project (a duplicate, say) still uses.
 
 ## Sora Ningyō (VTuber avatars)
 
@@ -51,8 +62,23 @@ Sora Ningyō (人形, "puppet") makes and performs VTuber avatars. New projects 
   - **Auto-rig face** sets up head angles, blinking, eyeballs, brows, mouth open and smile, breathing and hair sway as a starting point.
   - Pendulum physics for hair and accessories, expressions (sets of parameter overrides), and the tracking → parameter table.
   - Export a PNG, a `.sora-avatar` file (the rig as JSON plus PNG textures, zipped), or an Inochi2D puppet (`.inp`; deformers are baked into per-key mesh offsets, physics and expressions aren't carried over). Live2D's own `.moc3`/`.cmo3` formats are proprietary, so SoraLab can't write them.
-- **Open a Live2D model:** import a Cubism model (a zip of its folder, or its `.model3.json`, `.moc3`, textures, motions, expressions and physics). It plays with its own physics, expressions and idle motion, and tracking drives the standard Cubism parameters.
-  - Live2D's **Cubism Core** (`live2dcubismcore.min.js`) can't be included with SoraLab. A server admin downloads the Cubism SDK for Web from Live2D, accepts its licence, and uploads `Core/live2dcubismcore.min.js` once from any Live2D project. It is stored on the server (`data/avatar/`) and served only to signed-in people and to OBS output links.
+- **Open a Live2D model:** import a Cubism model (a zip of its folder, or its `.model3.json`, `.moc3`, textures, motions, expressions, pose and physics). Tracking drives the standard Cubism parameters. Playback follows the published behaviour of Live2D's open-source Cubism Framework:
+  - **Physics** from `.physics3.json`.
+  - **Motions** (`.motion3.json`):
+    - Each motion fades in and out (the model3.json's `FadeInTime` / `FadeOutTime`, else the motion's own, else 1 s), and curves can have their own fades.
+    - Starting a motion crossfades from the one playing.
+    - Priorities work as in Cubism: Idle, then Normal (starts only when nothing of its priority or higher plays), then Force (always starts).
+    - The idle group plays a random motion whenever nothing else does. Choose the idle group in Edit, or turn it off.
+    - Perform lists every motion with a ▶ button and a hotkey. *Interrupt* plays it as Force; *If free* plays it as Normal. Hotkeys reach the OBS output too.
+  - **Expressions** (`.exp3.json`):
+    - `Add`, `Multiply` and `Overwrite` blending.
+    - Each expression fades in and out over its own `FadeInTime` / `FadeOutTime` (1 s if not set). Turning one off fades it out.
+    - Several can be on at once. Where two set the same parameter, the one turned on later wins.
+  - **Pose** (`.pose3.json`):
+    - In each group of parts, only one shows (say, arms down or arms up).
+    - Motions choose which one with their PartOpacity curves. It fades in over the pose's `FadeInTime` (0.5 s if not set) while the others fade out along Cubism's curve, which never lets more than 15 % of the background show through.
+    - Linked parts follow their part.
+  - Live2D's **Cubism Core** (`live2dcubismcore.min.js`) can't be included with SoraLab. A server admin downloads the Cubism SDK for Web from Live2D, accepts its licence, and uploads `Core/live2dcubismcore.min.js`, either on the **Admin** page or from any Live2D project. Admin shows whether it's installed, its version and size, and can replace or remove it. It is stored on the server (`data/avatar/`) and served only to signed-in people and to OBS output links.
 - **3D avatar (VRM):** a VRM, glTF / GLB or FBX model set up for VTubing (see *3D avatars* below).
 
 **Perform** mode works the same for every kind:
@@ -195,6 +221,7 @@ For development, run `npm run dev:server` and `npm run dev:web` (Vite on port 51
 | `VIDEO_ENCODER` | `auto` (default) picks the GPU encoder if one works. You can also choose `nvenc`, `qsv`, `amf`, `vaapi`, `videotoolbox` or `cpu`. |
 | `RENDER_JOBS` | How many renders run at the same time (default 1). |
 | `VERSIONS_PER_DOC` | Automatic versions kept per project (default 50; named versions are always kept). |
+| `CLEANUP_EVERY_HOURS`, `CLEANUP_GRACE_HOURS` | Storage cleanup: how often it runs (default 6; `0` = only from Admin or Files) and how old an unused autosaved file must be before it goes (default 24, at least 1). |
 | `HTTPS_PORT`, `TLS_CERT`, `TLS_KEY`, `LAN_CA_CERT` | HTTPS on your network. The suite's setup fills these in. |
 | `COOKIE_SECURE`, `TRUST_PROXY` | Set both to `true` behind an HTTPS reverse proxy such as Caddy. |
 
