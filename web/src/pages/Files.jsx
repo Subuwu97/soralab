@@ -349,7 +349,26 @@ function TsunamiDialog({ asset, onClose }) {
 
 // ---------------------------------------------------------------- storage
 
-function StorageCard({ storage }) {
+function StorageCard({ storage, onFreed }) {
+  // Old copies of layers and edits that no project or version uses any more (the server also clears them every few hours).
+  const [unused, setUnused] = useState(null);
+  const [freeing, setFreeing] = useState(false);
+  const total = storage?.total;
+  useEffect(() => { if (total !== undefined) api.get('/api/storage/unused').then(setUnused).catch(() => setUnused(null)); }, [total]);
+  const freeUp = async () => {
+    if (!(await confirmDialog({
+      title: 'Free up space?',
+      message: `This removes ${unused.files} unused file${unused.files === 1 ? '' : 's'} (${fmtBytes(unused.bytes)}): old copies of layers and edits that your editors saved along the way, which no project or saved version uses any more and which are over ${unused.grace_hours} hours old. Your projects, their versions, uploads, library items and exports stay as they are.`,
+      confirm: 'Free up space',
+    }))) return;
+    setFreeing(true);
+    try {
+      const r = await api.post('/api/storage/cleanup', {});
+      toast(r.files ? `Freed ${fmtBytes(r.bytes)} (${r.files} file${r.files === 1 ? '' : 's'})` : 'Nothing to free up', { type: 'success' });
+      onFreed?.();
+    } catch (e) { toastError(e); }
+    setFreeing(false);
+  };
   if (!storage) return null;
   const parts = [
     { key: 'assets', label: 'Files', color: '#5AB4FF' }, { key: 'docs', label: 'Projects', color: '#8B7CFF' },
@@ -366,6 +385,12 @@ function StorageCard({ storage }) {
         {parts.map((p) => <span key={p.key} className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: p.color }} />{p.label} {fmtBytes(storage[p.key])}</span>)}
       </div>
       {!storage.quota && <div className="text-[11.5px] text-fg3 mt-1">No limit on this server</div>}
+      {unused?.files > 0 && (
+        <div className="flex items-center gap-2 mt-1.5 text-[11.5px] text-fg2" data-testid="storage-unused">
+          <span className="truncate">Unused: {unused.files} file{unused.files === 1 ? '' : 's'}, {fmtBytes(unused.bytes)}</span>
+          <Button size="sm" variant="ghost" icon="trash" busy={freeing} onClick={freeUp}>Free up space</Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -609,7 +634,7 @@ export default function Files() {
   return (
     <PageLayout wide>
       <PageHero icon="folder" title="Files" subtitle="Every project, upload and export in one place.">
-        <StorageCard storage={storage} />
+        <StorageCard storage={storage} onFreed={loadStorage} />
       </PageHero>
 
       <div className="flex flex-wrap items-center gap-2 mb-4">

@@ -59,9 +59,13 @@ export async function uploadFiles(files, { docId, onProgress, onStart } = {}) {
   return uploadWithProgress('/api/assets?many=1', fd, onProgress, { onStart });
 }
 
-/** Saves something made in the browser (a Blob) as a file in SoraLab. export: list it under Exports. */
-export function saveBlob(blob, name, { docId, isExport = true, onProgress } = {}) {
-  const q = new URLSearchParams({ name, ...(docId ? { doc_id: docId } : {}), ...(isExport ? { export: '1' } : {}) });
+/**
+ * Saves something made in the browser (a Blob) as a file in SoraLab. export: list it under Exports.
+ * autosave: an editor's own working file (a layer's pixels, an edited take) that a newer save replaces. The server's
+ * storage cleanup removes it once no project or version uses it any more.
+ */
+export function saveBlob(blob, name, { docId, isExport = true, autosave = false, onProgress } = {}) {
+  const q = new URLSearchParams({ name, ...(docId ? { doc_id: docId } : {}), ...(isExport ? { export: '1' } : autosave ? { source: 'autosave' } : {}) });
   return uploadWithProgress(`/api/assets/raw?${q}`, blob, onProgress, { headers: { 'content-type': blob.type || 'application/octet-stream' } });
 }
 

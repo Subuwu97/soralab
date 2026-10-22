@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS assets (
   size        INTEGER NOT NULL,
   width       INTEGER, height INTEGER, duration REAL, fps REAL, has_audio INTEGER,
   is_export   INTEGER NOT NULL DEFAULT 0,     -- made by SoraLab (render, export), shown under Exports
-  source      TEXT,                           -- upload | cloud:<file id> | render:<job id> | export
+  source      TEXT,                           -- upload | cloud:<file id> | render:<job id> | export | autosave (an editor's own save, e.g. a layer bitmap; see api/storage.js) | keep:… (kept in Files)
   web         INTEGER NOT NULL DEFAULT 0,     -- browser-friendly copy (images browsers can't show, video codecs they can't play): 0 not needed, 1 making, 2 ready, -1 failed
   meta        TEXT NOT NULL DEFAULT '{}',     -- codecs etc.
   created_at  INTEGER NOT NULL
@@ -162,7 +162,17 @@ CREATE TABLE IF NOT EXISTS doc_refs (
   PRIMARY KEY (doc_id, asset_id)
 );
 CREATE INDEX IF NOT EXISTS doc_refs_asset ON doc_refs(asset_id);
+
+-- Small server-wide facts: when autosave marking began, the last storage cleanup…
+CREATE TABLE IF NOT EXISTS server_state (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `);
+
+// assets.used_at: the last time a saved project mentioned the file. The storage cleanup counts its grace period from
+// this too, so a layer that was in use a minute ago (and may come back with Undo) is never treated as old.
+if (!db.prepare('PRAGMA table_info(assets)').all().some((c) => c.name === 'used_at')) db.exec('ALTER TABLE assets ADD COLUMN used_at INTEGER');
 
 export const now = () => Date.now();
 export const newId = () => crypto.randomBytes(9).toString('base64url').replace(/[-_]/g, (c) => (c === '-' ? 'x' : 'y'));

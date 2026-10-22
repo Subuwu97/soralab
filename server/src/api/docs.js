@@ -79,9 +79,16 @@ docs.get('/docs/:id', (req, res) => {
 });
 
 /** The project's contents, exactly as the app saved them. ETag is the revision. */
+// Project contents and thumbnails are written by people, so they're never allowed to run as a page on this origin:
+// no sniffing, a sandboxing CSP, and types that browsers could render as active content are served as plain bytes.
+const inert = (res) => res.set('X-Content-Type-Options', 'nosniff').set('Content-Security-Policy', "default-src 'none'; sandbox");
+const ACTIVE = /html|xml|svg|javascript|ecmascript|x-shockwave|pdf|multipart/i;
+const IMAGE = /^image\/(png|jpeg|webp|gif|avif)$/;
+
 docs.get('/docs/:id/data', (req, res) => {
   const { doc } = loadDoc(req, req.params.id);
-  res.set('ETag', `"${doc.rev}"`).set('X-Rev', String(doc.rev)).set('Cache-Control', 'no-store').type(doc.mime);
+  inert(res);
+  res.set('ETag', `"${doc.rev}"`).set('X-Rev', String(doc.rev)).set('Cache-Control', 'no-store').type(ACTIVE.test(doc.mime || '') ? 'application/octet-stream' : doc.mime);
   res.sendFile(path.join(docDir(doc.id), 'data'));
 });
 
@@ -137,8 +144,9 @@ docs.get('/docs/:id/thumb', (req, res) => {
   const f = path.join(docDir(doc.id), 'thumb');
   if (!doc.has_thumb || !fs.existsSync(f)) return res.status(404).end();
   let type = 'image/png';
-  try { type = fs.readFileSync(path.join(docDir(doc.id), 'thumb.type'), 'utf8'); } catch { /* png */ }
-  res.set('Cache-Control', 'private, max-age=86400').type(type).sendFile(f);
+  try { type = fs.readFileSync(path.join(docDir(doc.id), 'thumb.type'), 'utf8').trim(); } catch { /* png */ }
+  inert(res);
+  res.set('Cache-Control', 'private, max-age=86400').type(IMAGE.test(type) ? type : 'application/octet-stream').sendFile(f);
 });
 
 /** PATCH /api/docs/:id { name?, starred?, meta? } */
@@ -196,7 +204,10 @@ docs.post('/docs/trash/empty', (req, res) => {
 });
 
 export function removeDoc(doc) {
-  // Files uploaded into this project and not kept in Files on their own go with it.
+  // Files uploaded into this project and not kept in Files on their own go with it, unless another project (a
+  // duplicate, say) uses them: those stay, no longer tied to this project (autosaved ones are freed by the storage
+  // cleanup once nothing uses them).
+  db.prepare(`UPDATE assets SET doc_id = NULL WHERE doc_id = ? AND id IN (SELECT asset_id FROM doc_refs WHERE doc_id != ?)`).run(doc.id, doc.id);
   for (const a of db.prepare("SELECT id FROM assets WHERE doc_id = ? AND is_export = 0 AND source NOT LIKE 'keep%'").all(doc.id)) {
     fs.rmSync(path.join(config.dataDir, 'assets', a.id), { recursive: true, force: true });
     db.prepare('DELETE FROM assets WHERE id = ?').run(a.id);

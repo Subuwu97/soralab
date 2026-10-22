@@ -1,8 +1,9 @@
 // Saving and loading raster documents.
 //
 // Saved JSON: { v: 1, width, height, guides, layers: [...] } where each layer is the in-memory layer minus pixels;
-// pixels become { asset, x, y } — a PNG asset (uploaded with saveBlob, isExport: false) placed at x,y in the layer.
-// A Pix remembers its asset id, so only layers whose pixels changed since the last save are uploaded again.
+// pixels become { asset, x, y } — a PNG asset (uploaded with saveBlob, marked autosave) placed at x,y in the layer.
+// A Pix remembers its asset id, so only layers whose pixels changed since the last save are uploaded again. The old
+// PNGs of a changed layer are freed by the server's storage cleanup once no version of the project uses them.
 import { Pix, pixToCanvas, makeCanvas } from './pix.js';
 import { newDoc, newBitmap, uid } from './model.js';
 import { saveBlob, api } from '../../lib/api.js';
@@ -18,7 +19,7 @@ async function savePix(pix, docId, name) {
     if (!p) {
       p = (async () => {
         const blob = await canvasBlob(pixToCanvas(pix, b), 'image/png');
-        const a = await saveBlob(blob, `${name || 'layer'}.png`, { docId, isExport: false });
+        const a = await saveBlob(blob, `${name || 'layer'}.png`, { docId, isExport: false, autosave: true });
         pix.asset = a.id;
         return a.id;
       })();

@@ -280,7 +280,7 @@ export default function WaveEditor({ engine, file, clip, docId, canEdit, onApply
     try {
       const base = file.name.replace(/\.[^.]+$/, '').replace(/ \(edited( \d+)?\)$/, '');
       const blob = D.encodeWav(work, 24);
-      const asset = await saveBlob(blob, `${base} (edited).wav`, { docId, isExport: false, onProgress: (p) => setBusy({ label: 'Saving the edited file…', p }) });
+      const asset = await saveBlob(blob, `${base} (edited).wav`, { docId, isExport: false, autosave: true, onProgress: (p) => setBusy({ label: 'Saving the edited file…', p }) });
       engine.putBuffer(asset.id, D.toBuffer(work));
       onApply({ ...asset, duration: asset.duration || dur }, D.durationOf(undo[0]?.a || work));
       setUndo([]); setRedo([]);

@@ -26,9 +26,15 @@ async function make(Task, model, opts) {
   return null;
 }
 
-async function init({ origin, withHands }) {
+// Hands are optional (they cost about as much CPU/GPU as the face again). The confidence threshold is the
+// detector's own: below it a hand counts as not there, rather than guessed at.
+let handConf = 0.5;
+async function init({ origin, withHands, handConfidence }) {
   if (!face) face = await make(FaceLandmarker, `${origin}/models/face_landmarker.task`, { numFaces: 1, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true });
-  if (withHands && !hands) hands = await make(HandLandmarker, `${origin}/models/hand_landmarker.task`, { numHands: 2 });
+  const conf = Math.min(0.95, Math.max(0.1, Number(handConfidence) || 0.5));
+  const opts = { minHandDetectionConfidence: conf, minHandPresenceConfidence: conf, minTrackingConfidence: Math.max(0.3, conf - 0.1) };
+  if (withHands && !hands) { hands = await make(HandLandmarker, `${origin}/models/hand_landmarker.task`, { numHands: 2, ...opts }); handConf = conf; }
+  else if (withHands && hands && conf !== handConf) { await hands.setOptions(opts); handConf = conf; }
   if (!withHands && hands) { hands.close(); hands = null; }
 }
 
@@ -39,7 +45,7 @@ self.onmessage = async ({ data }) => {
     if (data.t === 'frame') {
       const { frame } = data;
       const ts = Math.max(lastTs + 1, Math.round(data.ts)); lastTs = ts; // MediaPipe needs increasing timestamps
-      const out = { t: 'result', ts: data.ts, face: null, hands: null };
+      const out = { t: 'result', ts: data.ts, face: null, hands: null, size: [frame.displayWidth || frame.width || 0, frame.displayHeight || frame.height || 0] };
       if (face) {
         const r = face.detectForVideo(frame, ts);
         if (r.faceLandmarks?.length) {
@@ -52,7 +58,8 @@ self.onmessage = async ({ data }) => {
       }
       if (hands) {
         const r = hands.detectForVideo(frame, ts);
-        if (r.landmarks?.length) out.hands = r.landmarks.map((l, i) => ({ side: r.handedness?.[i]?.[0]?.categoryName || '', pts: l.map((p) => [p.x, p.y, p.z]) }));
+        // handedness is labelled as if the picture were mirrored; ../tracking/hands.js sorts that out
+        out.hands = (r.landmarks || []).map((l, i) => ({ label: r.handedness?.[i]?.[0]?.categoryName || '', score: r.handedness?.[i]?.[0]?.score ?? 1, pts: l.map((p) => [p.x, p.y, p.z]), world: r.worldLandmarks?.[i]?.map((p) => [p.x, p.y, p.z]) || null }));
       }
       frame.close?.();
       self.postMessage(out);

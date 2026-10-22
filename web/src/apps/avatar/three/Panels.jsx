@@ -14,6 +14,8 @@ import { autoMap } from './humanoid.js';
 import { guessExpressions } from './exprmap.js';
 import { MARKERS } from './autorig.js';
 import { STARTER_DEFAULTS } from './starter.js';
+import { GestureInput, withGesture, GESTURE_OPTIONS } from '../gestures.jsx';
+import { demoHand } from '../tracking/hands.js';
 
 const Row = ({ label, children, className }) => (
   <div className={cx('flex items-center justify-between gap-2 min-h-8', className)}><span className="text-xs text-fg2 truncate">{label}</span><div className="flex items-center gap-1.5">{children}</div></div>
@@ -278,6 +280,8 @@ export function ExpressionsPanel({ doc, edit, canEdit, avatar, preview, setPrevi
                   options={[{ value: 'none', label: 'keeps working' }, { value: 'blend', label: 'fades out' }, { value: 'block', label: 'is blocked' }]} />
               </Row>
             ))}
+            <div className="text-xs text-fg2 mt-1">Hand gesture (Perform, with hand tracking on)</div>
+            <GestureInput value={doc.perform?.gestures?.[sel]} disabled={!canEdit} onChange={(g) => edit((d) => ({ ...d, perform: { ...(d.perform || {}), gestures: withGesture(d.perform?.gestures || {}, sel, g) } }), 'Gesture trigger')} />
             {!PRESETS.includes(sel) && canEdit && <Button size="xs" variant="ghost" icon="trash" className="self-start" onClick={() => { edit((d) => { const e2 = { ...d.expressions }; delete e2[sel]; return { ...d, expressions: e2 }; }, 'Delete expression'); setSel('blink'); }}>Delete this expression</Button>}
           </div>
           <Button size="xs" variant="ghost" className="mt-2" onClick={() => setTab('tracking')}>Tracking sensitivity →</Button>
@@ -560,6 +564,12 @@ export function TrackingPanel({ doc, edit, canEdit, avatar, testPose, setTestPos
             {T('eyeLOpen', 'Left eye open', 0, 1, 0.01)}{T('eyeROpen', 'Right eye open', 0, 1, 0.01)}
             {T('mouthOpen', 'Mouth open', 0, 1, 0.01)}{T('mouthForm', 'Frown / smile', -1, 1, 0.01)}
             <Slider label="Eyebrows" value={tp.browL} min={-1} max={1} step={0.01} reset={0} onChange={(v) => setTestPose({ ...tp, browL: v, browR: v })} />
+            {['L', 'R'].map((S) => (
+              <Row key={S} label={S === 'L' ? 'Left hand' : 'Right hand'}>
+                <Select small value={tp[`hand${S}`]?.gesture || ''} data-testid={`n3-test-hand${S}`} onChange={(v) => setTestPose({ ...tp, [`hand${S}`]: v ? demoHand(v, S) : undefined })}
+                  options={[{ value: '', label: 'Resting' }, ...GESTURE_OPTIONS.slice(1)]} />
+              </Row>
+            ))}
           </div>
         )}
         {!testPose && <Hint className="mt-1.5">With tracking off, the avatar breathes, sways and blinks on its own{t.idle ? '' : ' (idle is turned off below)'}.</Hint>}
@@ -581,6 +591,14 @@ export function TrackingPanel({ doc, edit, canEdit, avatar, testPose, setTestPos
           <Toggle checked={t.idle} disabled={!canEdit} onChange={(v) => set({ idle: v }, 'Idle motion')} label="Breathe and sway when tracking is lost" />
         </div>
       </PanelSection>
+      <PanelSection title="Hands and arms" id="n3-trk-hands">
+        <div className="flex flex-col gap-1.5">
+          <Toggle checked={t.hands !== false} disabled={!canEdit} onChange={(v) => set({ hands: v }, 'Hand tracking')} label="Arms and fingers follow tracked hands" />
+          {S('handReach', 'Reach', 0.5, 1.5, 0.05)}
+          {S('fingers', 'Finger curl', 0, 1.5, 0.05)}
+          <Hint>Turn on “Track hands too” in Perform → Sources. The arms reach for your wrists (elbows bend down and out, and hands stay outside the body), wrists turn and fingers curl{avatar && !avatar.humanoid?.getNormalizedBoneNode('leftIndexProximal') ? ' (this model has no finger bones mapped)' : ''}. A lost hand eases back to the resting pose.</Hint>
+        </div>
+      </PanelSection>
       <PanelSection title="Eyes" id="n3-trk-eyes">
         <div className="flex flex-col gap-1.5">
           {S('eyes', 'Gaze sensitivity', 0, 2, 0.05)}
@@ -600,7 +618,7 @@ export function TrackingPanel({ doc, edit, canEdit, avatar, testPose, setTestPos
           {S('mouth', 'Mouth sensitivity', 0, 2, 0.05)}
           {S('smile', 'Smile → Happy', 0, 1.5, 0.05)}
           {S('brows', 'Eyebrows', 0, 1.5, 0.05)}
-          <Hint>Mouth shapes come from aa/ih/ou/ee/oh visemes (mic or face) when tracking sends them, otherwise “mouth open” drives “aa”. Hands aren’t driven yet.</Hint>
+          <Hint>Mouth shapes come from aa/ih/ou/ee/oh visemes (mic or face) when tracking sends them, otherwise “mouth open” drives “aa”.</Hint>
         </div>
       </PanelSection>
     </>

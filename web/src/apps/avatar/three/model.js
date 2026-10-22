@@ -103,6 +103,9 @@ export const DEFAULT_DRIVE = {
   perfectSync: 'auto',      // 'auto' | 'on' | 'off' — drive ARKit shapes straight from tracking
   idle: true,               // breathe and sway when tracking is lost
   armAngle: null,           // degrees to lower T-posed arms by; null = automatic
+  hands: true,              // tracked hands move the arms, wrists and fingers (when Perform tracks hands)
+  handReach: 1,             // scales how far the hands move (1 = the avatar's own arm length)
+  fingers: 1,               // finger curl strength
 };
 export const DEFAULT_CAMERA = { framing: 'bust', fov: 30, zoom: 1, x: 0, y: 0, turn: 0, custom: null };
 export const DEFAULT_LOOK = { light: 'studio', env: true, background: '#2b2f3a', exposure: 1 };

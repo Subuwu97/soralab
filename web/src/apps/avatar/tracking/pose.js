@@ -51,7 +51,9 @@ export const defaultTracking = () => ({
   keys: Object.fromEntries(POSE_KEYS.map((k) => [k, { sens: 1, dead: 0, min: KEY_INFO[k].min, max: KEY_INFO[k].max, invert: false, smooth: 1 }])),
   neutral: {},                // resting values from "Set neutral"
   mic: { on: false, gain: 1, threshold: 0.02, visemes: true },
-  hands: false,
+  hands: false,               // hand tracking (off by default: it roughly doubles the CPU/GPU tracking needs)
+  handConfidence: 0.5,        // below this the hand detector reports no hand (0.1..0.95)
+  handSmooth: 1.5,            // hands are jumpier than faces: their filters are this much steadier
 });
 /** Fills in anything missing (older documents, new keys). */
 export function withTrackingDefaults(t) {
@@ -165,7 +167,6 @@ export class PoseShaper {
     }
     if (s.breathRate > 0) out.breath = breathAt(t - this.t0, s.breathRate);
     if (raw.blend) out.blend = s.mirror ? Object.fromEntries(Object.entries(raw.blend).map(([n, v]) => [BLEND_SWAP(n), v])) : raw.blend;
-    if (raw.hands) out.hands = raw.hands;
     return out;
   }
 }
@@ -185,6 +186,7 @@ export function packPose(p) {
   for (const [k, v] of Object.entries(p)) {
     if (typeof v === 'number') o[k] = Math.round(v * 1000) / 1000;
     else if (k === 'blend' && v) o.blend = Object.fromEntries(Object.entries(v).filter(([, x]) => x > 0.005).map(([n, x]) => [n, Math.round(x * 1000) / 1000]));
+    else if ((k === 'handL' || k === 'handR') && v) o[k] = Object.fromEntries(Object.entries(v).map(([n, x]) => [n, typeof x === 'number' ? Math.round(x * 1000) / 1000 : Array.isArray(x) ? x.map((y) => Math.round(y * 1000) / 1000) : x]));
     else if (v !== undefined) o[k] = v;
   }
   return o;

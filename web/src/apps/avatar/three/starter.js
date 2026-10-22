@@ -1,6 +1,6 @@
 // The "Starter avatar": a small stylised humanoid built from primitives in code, so people can try the whole pipeline
-// (expressions, spring bones, tracking, VRM export) without bringing a model. It's T-posed and faces +Z like VRM 1.0,
-// has a humanoid skeleton, a face with ARKit-named shapes (blink, squint, wide, jaw, pucker, funnel, smile, frown,
+// (expressions, spring bones, tracking, VRM export) without bringing a model. It's T-posed and faces +Z like VRM 1.0
+// (palms down, thumbs forward), has a humanoid skeleton with finger bones (so hand tracking can curl them), a face with ARKit-named shapes (blink, squint, wide, jaw, pucker, funnel, smile, frown,
 // stretch, brows) mapped to the VRM presets, MToon materials with outlines, and hair strands on spring bones.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -22,6 +22,13 @@ const mtoon = (name, color, shade, { outline = 0.0022, toony = 0.92, shift = -0.
 };
 const shade = (hex, k = 0.72, hue = 0.02) => { const c = new THREE.Color(hex); const hsl = {}; c.getHSL(hsl); return `#${new THREE.Color().setHSL((hsl.h + hue + 1) % 1, Math.min(1, hsl.s * 1.15), hsl.l * k).getHexString()}`; };
 
+// Fingers (left hand; x is mirrored for the right): name, segments, joint positions (the last one is the tip).
+const FINGER_BONES = [
+  ['Thumb', ['Metacarpal', 'Proximal', 'Distal'], [[0.552, 1.204, 0.024], [0.574, 1.2, 0.043], [0.593, 1.197, 0.056], [0.61, 1.195, 0.066]]],
+  ...[['Index', 0.021, 1], ['Middle', 0.007, 1.08], ['Ring', -0.007, 1], ['Little', -0.02, 0.8]].map(([f, z, s]) => [f, ['Proximal', 'Intermediate', 'Distal'],
+    [0.6, 0.6 + 0.026 * s, 0.6 + 0.045 * s, 0.6 + 0.06 * s].map((x) => [x, 1.209, z])]),
+];
+const FINGER_SEGS = FINGER_BONES.flatMap(([f, segs]) => segs.map((g, i) => [f + g, i < segs.length - 1 ? f + segs[i + 1] : `${f}_end`]));
 // Skeleton (world positions, metres). Bones have no rest rotation, which keeps VRM export trivial.
 const SKELETON = [
   ['hips', null, V(0, 0.84, 0)], ['spine', 'hips', V(0, 0.94, 0)], ['chest', 'spine', V(0, 1.06, 0)], ['upperChest', 'chest', V(0, 1.15, 0)],
@@ -30,7 +37,8 @@ const SKELETON = [
     const k = s === 'left' ? 1 : -1; const S = (n) => `${s}${n}`;
     return [
       [S('Shoulder'), 'upperChest', V(0.03 * k, 1.21, 0)], [S('UpperArm'), S('Shoulder'), V(0.13 * k, 1.21, 0)], [S('LowerArm'), S('UpperArm'), V(0.34 * k, 1.21, 0)],
-      [S('Hand'), S('LowerArm'), V(0.54 * k, 1.21, 0)], [S('Hand_end'), S('Hand'), V(0.63 * k, 1.21, 0)],
+      [S('Hand'), S('LowerArm'), V(0.54 * k, 1.21, 0)], [S('Hand_end'), S('Hand'), V(0.6 * k, 1.21, 0)],
+      ...FINGER_BONES.flatMap(([f, segs, pts]) => pts.map((p, i) => [i < segs.length ? S(f + segs[i]) : S(`${f}_end`), i ? S(f + segs[i - 1]) : S('Hand'), V(p[0] * k, p[1], p[2])])),
       [S('UpperLeg'), 'hips', V(0.08 * k, 0.8, 0)], [S('LowerLeg'), S('UpperLeg'), V(0.08 * k, 0.45, 0)], [S('Foot'), S('LowerLeg'), V(0.08 * k, 0.08, 0)],
       [S('Toes'), S('Foot'), V(0.08 * k, 0.025, 0.09)], [S('Toes_end'), S('Toes'), V(0.08 * k, 0.025, 0.15)],
     ];
@@ -38,7 +46,7 @@ const SKELETON = [
 ];
 // Each deforming bone and the point its segment runs to (for skin weights).
 const SEGMENTS = [['hips', 'spine'], ['spine', 'chest'], ['chest', 'upperChest'], ['upperChest', 'neck'], ['neck', 'head'],
-  ...['left', 'right'].flatMap((s) => [['Shoulder', 'UpperArm'], ['UpperArm', 'LowerArm'], ['LowerArm', 'Hand'], ['Hand', 'Hand_end'], ['UpperLeg', 'LowerLeg'], ['LowerLeg', 'Foot'], ['Foot', 'Toes'], ['Toes', 'Toes_end']].map(([a, b]) => [s + a, s + b]))];
+  ...['left', 'right'].flatMap((s) => [['Shoulder', 'UpperArm'], ['UpperArm', 'LowerArm'], ['LowerArm', 'Hand'], ['Hand', 'Hand_end'], ['UpperLeg', 'LowerLeg'], ['LowerLeg', 'Foot'], ['Foot', 'Toes'], ['Toes', 'Toes_end'], ...FINGER_SEGS].map(([a, b]) => [s + a, s + b]))];
 
 const HEAD_C = V(0, 1.45, 0); const HEAD_R = V(0.15, 0.16, 0.145);
 const onHead = (x, y) => HEAD_R.z * Math.sqrt(Math.max(0, 1 - (x / HEAD_R.x) ** 2 - ((y - HEAD_C.y) / HEAD_R.y) ** 2));
@@ -161,7 +169,9 @@ export function buildStarter(opts = {}) {
     { geo: limb(W('leftUpperLeg'), W('leftLowerLeg').clone().add(V(0, 0.1, 0)), 0.068, 0.058), mat: 0 }, { geo: limb(W('rightUpperLeg'), W('rightLowerLeg').clone().add(V(0, 0.1, 0)), 0.068, 0.058), mat: 0 }, // shorts
     { geo: limb(W('upperChest').clone().add(V(0, 0.06, 0)), W('head').clone().add(V(0, 0.04, 0)), 0.04), mat: 1 },                        // neck (skin)
     { geo: limb(W('leftLowerArm'), W('leftHand'), 0.036, 0.03), mat: 1 }, { geo: limb(W('rightLowerArm'), W('rightHand'), 0.036, 0.03), mat: 1 },
-    { geo: ellipsoid(W('leftHand').clone().add(V(0.035, 0, 0)), V(0.05, 0.022, 0.04)), mat: 1 }, { geo: ellipsoid(W('rightHand').clone().add(V(-0.035, 0, 0)), V(0.05, 0.022, 0.04)), mat: 1 },
+    { geo: ellipsoid(W('leftHand').clone().add(V(0.031, 0, 0.002)), V(0.04, 0.019, 0.034)), mat: 1 }, { geo: ellipsoid(W('rightHand').clone().add(V(-0.031, 0, 0.002)), V(0.04, 0.019, 0.034)), mat: 1 },
+    // fingers: a little capsule per segment
+    ...['left', 'right'].flatMap((s) => FINGER_SEGS.map(([a, b]) => ({ geo: limb(W(s + a), W(s + b), /Thumb/.test(a) ? 0.0105 : 0.0085, /Thumb/.test(a) ? 0.009 : 0.0075, 4), mat: 1 }))),
     { geo: limb(W('leftLowerLeg').clone().add(V(0, 0.12, 0)), W('leftFoot'), 0.05, 0.04), mat: 1 }, { geo: limb(W('rightLowerLeg').clone().add(V(0, 0.12, 0)), W('rightFoot'), 0.05, 0.04), mat: 1 },
     { geo: ellipsoid(V(0.08, 0.05, 0.04), V(0.055, 0.045, 0.1)), mat: 2 }, { geo: ellipsoid(V(-0.08, 0.05, 0.04), V(0.055, 0.045, 0.1)), mat: 2 }, // shoes
     { geo: new THREE.TorusGeometry(0.052, 0.013, 10, 32).rotateX(Math.PI / 2).translate(0, 1.255, 0.004), mat: 3 },                      // collar trim

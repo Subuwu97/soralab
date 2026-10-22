@@ -66,10 +66,12 @@ export function updateRefs(doc, body) {
   if (body.length > 64 * 1024 ** 2) return;
   const text = body.toString('utf8');
   const ids = [...new Set(Array.from(text.matchAll(ID_RE), (m) => m[1]))];
+  const t = Date.now();
   const tx = db.transaction(() => {
     db.prepare('DELETE FROM doc_refs WHERE doc_id = ?').run(doc.id);
     const add = db.prepare('INSERT OR IGNORE INTO doc_refs (doc_id, asset_id) SELECT ?, id FROM assets WHERE id = ? AND owner = ? AND (doc_id IS NULL OR doc_id != ?)');
-    for (const id of ids) add.run(doc.id, id, doc.owner, doc.id);
+    const used = db.prepare('UPDATE assets SET used_at = ? WHERE id = ?'); // the storage cleanup's grace period starts again
+    for (const id of ids) { add.run(doc.id, id, doc.owner, doc.id); used.run(t, id); }
   });
   tx();
 }

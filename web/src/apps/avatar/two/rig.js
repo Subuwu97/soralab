@@ -1,7 +1,8 @@
 // Rig assist: "Auto-rig face" builds a starting rig from the named parts (head angle X/Y/Z, eye blink, eyeballs,
-// brows, mouth open and form, breathing, body sway, hair sway with physics), and keyform mirroring (left ↔ right).
+// brows, mouth open and form, breathing, body sway, hair sway with physics, and arms when there are arm / hand parts),
+// and keyform mirroring (left ↔ right).
 // It's a first pass the person tweaks — everything it makes is ordinary deformers and keyforms.
-import { uid, stdParam, paramById, formKey, mirrorName, warpRest, DEFAULT_BINDINGS } from './model.js';
+import { uid, stdParam, paramById, formKey, mirrorName, warpRest, DEFAULT_BINDINGS, STD_PARAMS } from './model.js';
 import { newChain } from './physics.js';
 
 const box = (p) => [p.x, p.y, p.w, p.h];
@@ -80,8 +81,11 @@ export function autoRig(input) {
 
   // parenting
   const faceIds = new Set(faceParts.map((p) => p.id));
+  const armOf = new Map(doc.deformers.filter((d) => d.auto && d.armParts).flatMap((d) => d.armParts.map((id) => [id, d.id])));
+  for (const d of doc.deformers) delete d.armParts;
   doc.parts = doc.parts.map((p) => {
     if (faceIds.has(p.id)) return { ...p, parent: faceW.id };
+    if (armOf.has(p.id)) return { ...p, parent: armOf.get(p.id) };
     if (hairW && p.role === 'hairBack') return { ...p, parent: hairW.id };
     if (!p.parent) return { ...p, parent: p.role === 'neck' || p.role === 'body' || !p.role ? body.id : head.id };
     return p;
@@ -89,6 +93,7 @@ export function autoRig(input) {
 
   const edit = (id, fn) => { doc.parts = doc.parts.map((p) => (p.id === id ? fn(p) : p)); };
   const bind = (p, params, forms) => edit(p.id, (q) => ({ ...q, kf: [...(q.kf || []), { auto: true, params, forms }] }));
+  arms(doc, by, body, report, bind);
 
   // --- eyes
   for (const side of ['L', 'R']) {
@@ -139,6 +144,53 @@ export function autoRig(input) {
     report.push(`${name}: sway on ${param}, driven by physics.`);
   }
   return { doc, report };
+}
+
+// ---------------------------------------------------------------- arms
+
+// Hand drawings for a gesture ("Hand L peace", "手R グー"…): shown while hand tracking sees that gesture.
+const HAND_VARIANTS = [['Peace', /(peace|victory|v\s*sign|ピース|チョキ)/i], ['Fist', /(fist|grip|closed|グー|握)/i], ['Point', /(point|指差|指さし)/i], ['ThumbUp', /(thumb|good|いいね|グッド)/i]];
+
+/**
+ * Arms: a rotation deformer at the shoulder (ParamArmLA), one at the elbow (ParamArmLB) and one at the wrist
+ * (ParamHandL), for parts with the upper arm / forearm / hand roles. Arms are assumed to hang down as drawn; the angles
+ * turn them outward (L is the avatar's left, on the screen's right). Hand parts named for a gesture swap in when it's seen.
+ */
+function arms(doc, by, body, report, bind) {
+  for (const S of ['L', 'R']) {
+    const ups = by(`upperArm${S}`); const lows = by(`lowerArm${S}`); const hands = by(`hand${S}`);
+    if (!ups.length && !lows.length && !hands.length) continue;
+    for (const [id] of STD_PARAMS) if (new RegExp(`^Param(Arm|Hand)${S}`).test(id) && !paramById(doc, id)) doc.params.push(stdParam(id));
+    for (const b of DEFAULT_BINDINGS) if (new RegExp(`^Param(Arm|Hand)${S}`).test(b.param) && !doc.bindings.some((x) => x.param === b.param)) doc.bindings.push({ ...b });
+    const out = S === 'L' ? 1 : -1;
+    // rotation forms: a positive (outward) angle turns the arm toward the screen's right for L, left for R
+    const rot = (param, lo, hi) => ({ auto: true, params: [param], forms: { [formKey([lo])]: { a: -out * lo }, [formKey([hi])]: { a: -out * hi } } });
+    const topMid = (b, f = 0.2) => [b[0] + b[2] / 2, b[1] + Math.min(b[2], b[3]) * f];
+    const made = [];
+    let parent = body.id;
+    const ub = union(ups.map(box)); const lb = union(lows.map(box)); const hb = union(hands.map(box));
+    // the shoulder joint: top of the upper arm (or of whatever the arm is drawn as)
+    const first = ub || lb || hb;
+    const upper = { id: uid('d'), name: `Arm ${S} (shoulder)`, type: 'rotation', auto: true, parent, pivot: topMid(first, 0.25), opacity: 1, kf: [rot(`ParamArm${S}A`, -45, 135)], armParts: ups.map((p) => p.id) };
+    made.push(upper); parent = upper.id;
+    if (lb && ub) {
+      const fore = { id: uid('d'), name: `Arm ${S} (elbow)`, type: 'rotation', auto: true, parent, pivot: topMid(lb, 0.2), opacity: 1, kf: [rot(`ParamArm${S}B`, -150, 150)], armParts: lows.map((p) => p.id) };
+      made.push(fore); parent = fore.id;
+    } else upper.armParts.push(...lows.map((p) => p.id));
+    if (hb && first !== hb) {
+      const wrist = { id: uid('d'), name: `Hand ${S} (wrist)`, type: 'rotation', auto: true, parent, pivot: topMid(hb, 0.15), opacity: 1, kf: [rot(`ParamHand${S}`, -80, 80)], armParts: hands.map((p) => p.id) };
+      made.push(wrist);
+    } else made[made.length - 1].armParts.push(...hands.map((p) => p.id));
+    doc.deformers.push(...made);
+    // gesture hands: a variant shows at its gesture's weight and hides the plain hand
+    const variants = hands.map((p) => [p, HAND_VARIANTS.find(([, re]) => re.test(p.name))?.[0]]);
+    const used = [...new Set(variants.map(([, v]) => v).filter(Boolean))];
+    for (const [p, v] of variants) {
+      if (v) bind(p, [`ParamHand${S}${v}`], { [formKey([0])]: { o: -1 }, [formKey([1])]: {} });
+      else for (const u of used) bind(p, [`ParamHand${S}${u}`], { [formKey([1])]: { o: -1 } });
+    }
+    report.push(`Arm ${S}: ${made.map((d) => d.name.replace(/^.*\((.*)\)$/, '$1')).join(', ')} rotation (ParamArm${S}A${made.length > 1 ? `/B` : ''}${made.length > 2 ? `, ParamHand${S}` : ''})${used.length ? `; gesture hands: ${used.join(', ')}` : ''}.`);
+  }
 }
 
 // ---------------------------------------------------------------- mirroring

@@ -66,7 +66,7 @@ export async function titleAsset(title, W, H, cache, docId) {
     pending.set(key, (async () => {
       await loadTitleFont(title);
       const blob = await canvasBlob(drawTitle(title, W, H, 1), 'image/png');
-      const a = await saveBlob(blob, `Title ${key}.png`, { docId, isExport: false });
+      const a = await saveBlob(blob, `Title ${key}.png`, { docId, isExport: false, autosave: true });
       cache[key] = a.id;
       return a.id;
     })().finally(() => pending.delete(key)));

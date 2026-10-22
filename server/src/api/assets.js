@@ -132,8 +132,8 @@ assets.post('/assets', upload.any(), h(async (req, res) => {
 }));
 
 /**
- * POST /api/assets/raw?name=&doc_id=&export=1 — the body is the file. For things made in the browser:
- * PNG/JPEG/PDF/SVG exports, recorded audio, rendered animation.
+ * POST /api/assets/raw?name=&doc_id=&export=1&source=autosave — the body is the file. For things made in the browser:
+ * PNG/JPEG/PDF/SVG exports, recorded audio, rendered animation, layer bitmaps.
  */
 assets.post('/assets/raw', h(async (req, res) => {
   const name = safeName(req.query.name, 'export');
@@ -151,7 +151,10 @@ assets.post('/assets/raw', h(async (req, res) => {
     ws.on('error', reject);
     req.on('error', reject);
   }).catch((e) => { fs.rmSync(tmp, { force: true }); throw e; });
-  const a = await storeAsset(req.user.id, tmp, { name, mime: req.get('content-type'), docId, isExport: !!req.query.export, source: req.query.export ? 'export' : 'upload' });
+  // source=autosave: an editor's own working file (a layer's pixels, an edited take). The storage cleanup may remove it
+  // once no project or version uses it any more (api/storage.js).
+  const source = req.query.export ? 'export' : req.query.source === 'autosave' ? 'autosave' : 'upload';
+  const a = await storeAsset(req.user.id, tmp, { name, mime: req.get('content-type'), docId, isExport: !!req.query.export, source });
   res.status(201).json(assetOut(a));
 }));
 

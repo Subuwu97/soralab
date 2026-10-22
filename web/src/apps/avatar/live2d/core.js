@@ -27,5 +27,22 @@ export async function uploadCore(file) {
   const r = await fetch('/api/avatar/cubism-core.js', { method: 'PUT', credentials: 'same-origin', body: file, headers: { 'content-type': 'application/javascript' } });
   const out = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(out.message || `Upload failed (${r.status})`);
+  forgetCore();
   return out;
+}
+/** Admin: removes Cubism Core from the server (Live2D projects then show how to add it again). */
+export const removeCore = () => api.del('/api/avatar/cubism-core.js').finally(forgetCore);
+
+/** Forgets the Core loaded into this page, so the next loadCore() fetches the one on the server now. */
+export function forgetCore() { loading = null; try { delete window.Live2DCubismCore; } catch { window.Live2DCubismCore = undefined; } }
+
+/** Core's csmGetVersion() number as "5.1.0". */
+export const fmtCoreVersion = (v) => (Number.isFinite(v) && v > 0 ? `${v >>> 24}.${(v >> 16) & 255}.${v & 0xffff}` : null);
+
+/** The installed Core's version ("5.1.0"), read by loading it into this page; null when it can't be read. */
+export async function coreVersion(stamp = '') {
+  try {
+    const Core = await loadCore(`/api/avatar/cubism-core.js${stamp ? `?v=${encodeURIComponent(stamp)}` : ''}`);
+    return fmtCoreVersion(Core.Version?.csmGetVersion?.());
+  } catch { return null; }
 }

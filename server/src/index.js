@@ -13,6 +13,7 @@ import { suite, cloudEnabled, tsunamiEnabled } from './api/suite.js';
 import { jobs, resumeJobs } from './api/jobs.js';
 import { admin } from './api/admin.js';
 import { avatar, attachRelay } from './api/avatar.js';
+import { storage, scheduleCleanup } from './api/storage.js';
 import { errorHandler } from './api/util.js';
 import { notifier } from './notify.js';
 import { warmUp } from './hwaccel.js';
@@ -41,7 +42,7 @@ app.get('/api/suite-image', suiteImageRoute);
 app.use('/api/notifications', express.json());
 notifier.routes(app, { subOf: (req) => req.user?.id || null, prefix: '/api' });
 app.use('/api/admin', admin);
-for (const r of [docs, assets, libraries, suite, jobs, avatar]) app.use('/api', r);
+for (const r of [docs, assets, libraries, suite, jobs, avatar, storage]) app.use('/api', r);
 app.use('/api', (req, res) => res.status(404).json({ error: 'not_found', message: 'Unknown API endpoint.' }));
 app.use(errorHandler);
 
@@ -59,4 +60,5 @@ attachRelay(app.listen(config.port, config.host, () => {
   warmUp();
   resumeWebCopies();
   resumeJobs();
+  scheduleCleanup();
 }));

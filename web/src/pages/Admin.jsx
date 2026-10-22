@@ -1,6 +1,6 @@
 // Admin (server admins only): what's on this server — people, projects, storage, the render queue and encoder —
-// plus suspending people and the latest renders. Everyone else gets a polite note.
-import { useCallback, useEffect, useState } from 'react';
+// plus suspending people, the latest renders, the storage cleanup and Live2D's Cubism Core. Everyone else gets a polite note.
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, fmtBytes, ago } from '../lib/api.js';
 import { useApp } from '../lib/app.jsx';
@@ -10,6 +10,7 @@ import { AppTile } from '../components/Brand.jsx';
 import { Icon } from '../components/Icons.jsx';
 import { Button, Toggle, Spinner, EmptyState, ProgressBar, confirmDialog, toast, toastError, cx } from '../components/ui.jsx';
 import { PageHero } from './_shared/index.jsx';
+import { coreStatus, coreVersion, uploadCore, removeCore, CORE_DOWNLOAD, CORE_LICENCE } from '../apps/avatar/live2d/core.js';
 
 const STATUS = {
   queued: { label: 'Queued', icon: 'clock', cls: 'bg-chip text-fg2' },
@@ -58,6 +59,92 @@ const duration = (j) => {
   return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`;
 };
 
+const BY = { schedule: 'automatic', admin: 'by an admin', person: 'by a person for their own files' };
+
+/** Storage cleanup: unused autosaved files (old layer bitmaps, replaced edits) — how much, the last run, "Clean up now". */
+function CleanupPanel() {
+  const [s, setS] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => api.get('/api/admin/storage').then(setS).catch((e) => setS({ error: e.message })), []);
+  useEffect(() => { load(); }, [load]);
+  const run = async () => {
+    if (!(await confirmDialog({ title: 'Clean up unused storage?', message: `Removes ${s.unused.files} file${s.unused.files === 1 ? '' : 's'} (${fmtBytes(s.unused.bytes)}) that editors saved along the way and nothing uses any more. Projects, their versions, uploads kept in Files, library items and exports are never removed.`, confirm: 'Clean up now' }))) return;
+    setBusy(true);
+    try { const r = await api.post('/api/admin/storage/cleanup', {}); toast(r.files ? `Removed ${r.files} file${r.files === 1 ? '' : 's'}, ${fmtBytes(r.bytes)}` : 'Nothing to clean up', { type: 'success' }); } catch (e) { toastError(e); }
+    setBusy(false); load();
+  };
+  const last = s?.last_run;
+  return (
+    <Panel title="Storage cleanup" icon="trash" actions={<Button size="sm" variant="primary" busy={busy} disabled={!s?.unused?.files} onClick={run} data-testid="cleanup-run">Clean up now</Button>}>
+      <div className="p-4 sm:p-5" data-testid="cleanup-panel">
+        {!s ? <Spinner /> : s.error ? <p className="text-sm text-danger">{s.error}</p> : (
+          <>
+            <div className="text-[13px] text-fg2">Unused storage</div>
+            <div className="font-head font-bold text-2xl tabular-nums" data-testid="cleanup-unused">{s.unused.files} file{s.unused.files === 1 ? '' : 's'}, {fmtBytes(s.unused.bytes)}</div>
+            <div className="text-xs text-fg2 mt-2">
+              {last ? <>Last run {ago(last.at)} <span className="text-fg3">({BY[last.by] || last.by})</span>: removed {last.files} file{last.files === 1 ? '' : 's'}, {fmtBytes(last.bytes)}.</> : 'Hasn’t run yet.'}
+            </div>
+            <p className="text-[11.5px] text-fg3 mt-3">
+              Old copies of layers and edits that editors saved along the way (Sora Kōsaku and Sora Paint save each changed layer as a new file), once no project or saved version uses them.
+              {s.every_hours > 0 ? ` Runs by itself every ${s.every_hours} hours.` : ' Runs only when you ask (CLEANUP_EVERY_HOURS is 0).'} Files are kept for at least {s.grace_hours} hours. Projects, versions, uploads kept in Files, library items and exports are never removed.
+            </p>
+          </>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+/** Live2D's Cubism Core: installed or not, its version and size; upload / replace / remove. It can't ship with SoraLab. */
+function CorePanel() {
+  const [core, setCore] = useState(null);
+  const [version, setVersion] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const input = useRef(null);
+  const load = useCallback(async () => {
+    try {
+      const c = await coreStatus(); setCore(c);
+      setVersion(c.installed ? await coreVersion(c.uploaded_at) : null);
+    } catch (e) { setCore({ error: e.message }); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+  const upload = async (f) => {
+    if (!f) return;
+    setBusy(true);
+    try { await uploadCore(f); toast('Cubism Core added for everyone on this server.', { type: 'success' }); } catch (e) { toastError(e); }
+    setBusy(false); load();
+  };
+  const remove = async () => {
+    if (!(await confirmDialog({ title: 'Remove Cubism Core?', message: 'Live2D projects can’t play until it’s added again (OBS output links too). Projects and models are kept.', confirm: 'Remove', danger: true }))) return;
+    try { await removeCore(); toast('Cubism Core removed'); } catch (e) { toastError(e); }
+    load();
+  };
+  return (
+    <Panel title="Live2D Cubism Core" icon="sparkles" actions={core?.installed && <Button size="sm" variant="ghost" onClick={remove} data-testid="core-remove">Remove</Button>}>
+      <div className="p-4 sm:p-5" data-testid="core-panel">
+        {!core ? <Spinner /> : core.error ? <p className="text-sm text-danger">{core.error}</p> : (
+          <>
+            <div className="flex items-center gap-3 mb-3">
+              <span className={cx('w-11 h-11 rounded-xl grid place-items-center shrink-0', core.installed ? 'sora-sky text-white' : 'bg-chip text-fg2')}><Icon name={core.installed ? 'check' : 'warning'} size={20} /></span>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold truncate" data-testid="core-status">{core.installed ? `Installed${version ? ` · version ${version}` : ''}` : 'Not installed'}</div>
+                <div className="text-xs text-fg2 truncate">{core.installed ? `${fmtBytes(core.size)} · added ${ago(core.uploaded_at)}${version ? '' : ' · version unknown'}` : 'Live2D projects in Sora Ningyō need it to play.'}</div>
+              </div>
+              <Button size="sm" variant={core.installed ? 'secondary' : 'primary'} icon="upload" busy={busy} onClick={() => { input.current.value = ''; input.current.click(); }} data-testid="core-upload">{core.installed ? 'Replace…' : 'Upload…'}</Button>
+            </div>
+            <ol className="list-decimal pl-5 text-[12.5px] text-fg2 flex flex-col gap-0.5 mb-2">
+              <li>Download the <a className="text-accent underline" href={CORE_DOWNLOAD} target="_blank" rel="noreferrer">Cubism SDK for Web</a> from Live2D and accept its licence.</li>
+              <li>Upload <code className="text-fg">Core/live2dcubismcore.min.js</code> from the download.</li>
+            </ol>
+            <p className="text-[11.5px] text-fg3">Live2D’s licence doesn’t let SoraLab include Cubism Core, so it’s added here and kept on this server (<code>data/avatar/</code>). Only signed-in people and your OBS output links can load it. Live2D’s terms apply to it and to how you use it: free for individuals and small businesses under their revenue limit, see the <a className="underline" href={CORE_LICENCE} target="_blank" rel="noreferrer">SDK licence</a>.</p>
+            <input ref={input} type="file" accept=".js" className="hidden" onChange={(e) => upload(e.target.files[0])} />
+          </>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
 export default function Admin() {
   const { me } = useApp();
   const [overview, setOverview] = useState(null);
@@ -103,7 +190,7 @@ export default function Admin() {
 
   return (
     <PageLayout wide>
-      <PageHero icon="settings" title="Admin" subtitle="People, storage and the render queue on this SoraLab server.">
+      <PageHero icon="settings" title="Admin" subtitle="People, storage, the render queue and Live2D’s Cubism Core on this SoraLab server.">
         <Button icon="refresh" onClick={load}>Refresh</Button>
       </PageHero>
 
@@ -162,6 +249,11 @@ export default function Admin() {
                   <div className="text-xs text-fg3 mt-4">{o.render.presets?.length || 0} export presets · Storage quota: {o.quota ? `${fmtBytes(o.quota)} per person` : 'none'}</div>
                 </div>
               </Panel>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] mb-6">
+              <CleanupPanel />
+              <CorePanel />
             </div>
 
             <Panel title="People" icon="users" className="mb-6" actions={<span className="text-xs text-fg3">{users.length}</span>}>

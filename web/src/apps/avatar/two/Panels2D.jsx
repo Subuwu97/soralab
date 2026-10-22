@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { Button, IconButton, NumberInput, Select, Slider, Toggle, Checkbox, TextInput, PanelSection, promptDialog, confirmDialog, toast, cx } from '../../../components/ui.jsx';
 import { Icon } from '../../../components/Icons.jsx';
 import { checklist, ROLES, paramById, uid, chainOf, wouldLoop, formKey, stdParam, STD_PARAMS, DEFAULT_BINDINGS, defaults } from './model.js';
-import { POSE_KEYS } from '../contract.js';
+import { POSE_KEYS, HAND_KEYS } from '../contract.js';
 import { KEY_INFO } from '../tracking/pose.js';
+import { HAND_KEY_INFO } from '../tracking/hands.js';
 import { newChain } from './physics.js';
+import { GestureInput, withGesture } from '../gestures.jsx';
 
 const Row = ({ children, className }) => <div className={cx('flex items-center gap-2 min-h-7', className)}>{children}</div>;
 const Label = ({ children }) => <span className="text-xs text-fg2 w-20 shrink-0">{children}</span>;
@@ -93,8 +95,8 @@ function ChecklistSection({ doc, sel, canEdit, editPart, setSel }) {
   const list = checklist(doc);
   const missing = list.filter((c) => !c.optional && !c.parts.length).length;
   return (
-    <PanelSection title={`Face rig checklist${missing ? ` · ${missing} missing` : ' · ready'}`} id="av-check" defaultOpen={false}>
-      <p className="text-[11px] text-fg3 mb-2">Roles are guessed from layer names (Eye L white, 前髪…). Select a part and click “Use selected” to set one.</p>
+    <PanelSection title={`Rig checklist${missing ? ` · ${missing} missing` : ' · ready'}`} id="av-check" defaultOpen={false}>
+      <p className="text-[11px] text-fg3 mb-2">Roles are guessed from layer names (Eye L white, 前髪, Arm L, Hand R peace…). Select a part and click “Use selected” to set one. Arms and hands are optional: with them, auto-rig adds arm rotation for hand tracking.</p>
       {list.map((c) => (
         <div key={c.id} className="flex items-center gap-1.5 h-6 text-[12px]">
           <Icon name={c.parts.length ? 'check' : c.optional ? 'dot' : 'warning'} size={13} className={c.parts.length ? 'text-ok' : c.optional ? 'text-fg3' : 'text-warn'} />
@@ -359,7 +361,7 @@ export function ExpressionsPanel({ doc, values, canEdit, edit, preview, setPrevi
   const hot = doc.perform?.hotkeys || {};
   return (
     <PanelSection title="Expressions" id="av-expr" actions={canEdit && <Button size="sm" variant="ghost" icon="plus" onClick={capture}>Capture</Button>}>
-      <p className="text-[11px] text-fg3 mb-2">An expression overrides some parameters (blush, sparkly eyes, angry brows…). Set parameters, click Capture, then give it a hotkey to toggle or hold while performing.</p>
+      <p className="text-[11px] text-fg3 mb-2">An expression overrides some parameters (blush, sparkly eyes, angry brows…). Set parameters, click Capture, then give it a hotkey or a hand gesture (peace sign, thumbs up…) to toggle or hold while performing.</p>
       {doc.expressions.map((x) => (
         <div key={x.id} className="rounded-md bg-panel-2 p-2 mb-2 flex flex-col gap-1">
           <Row>
@@ -371,6 +373,10 @@ export function ExpressionsPanel({ doc, values, canEdit, edit, preview, setPrevi
             <span className="text-[11px] text-fg2">Hotkey</span>
             <HotkeyInput value={hot[x.id]?.key || ''} disabled={!canEdit} onChange={(k) => edit((d) => ({ ...d, perform: { ...d.perform, hotkeys: { ...(d.perform?.hotkeys || {}), [x.id]: { mode: 'toggle', ...(d.perform?.hotkeys?.[x.id] || {}), key: k } } } }), 'Expression hotkey')} />
             <Select small value={hot[x.id]?.mode || 'toggle'} onChange={(v) => edit((d) => ({ ...d, perform: { ...d.perform, hotkeys: { ...(d.perform?.hotkeys || {}), [x.id]: { key: '', ...(d.perform?.hotkeys?.[x.id] || {}), mode: v } } } }), 'Expression hotkey')} options={[{ value: 'toggle', label: 'Toggle' }, { value: 'hold', label: 'Hold' }]} />
+          </Row>
+          <Row>
+            <span className="text-[11px] text-fg2">Gesture</span>
+            <GestureInput value={doc.perform?.gestures?.[x.id]} disabled={!canEdit} onChange={(g) => edit((d) => ({ ...d, perform: { ...d.perform, gestures: withGesture(d.perform?.gestures || {}, x.id, g) } }), 'Gesture trigger')} />
           </Row>
           {x.params.map((o, i) => (
             <div key={i} className="flex items-center gap-1">
@@ -397,6 +403,7 @@ export function HotkeyInput({ value, onChange, disabled }) {
   );
 }
 
+const POSE_OPTIONS = [{ group: 'Face and body', options: POSE_KEYS.map((k) => ({ value: k, label: KEY_INFO[k].label })) }, { group: 'Hands and arms', options: HAND_KEYS.map((k) => ({ value: k, label: HAND_KEY_INFO[k].label })) }];
 export function TrackingMapPanel({ doc, canEdit, edit }) {
   const set = (bindings, label, merge) => edit((d) => ({ ...d, bindings }), label, merge);
   const b = doc.bindings || [];
@@ -407,11 +414,11 @@ export function TrackingMapPanel({ doc, canEdit, edit }) {
         <IconButton icon="refresh" label="Reset to defaults" size={24} iconSize={14} onClick={() => set(DEFAULT_BINDINGS.filter((x) => paramById(doc, x.param)).map((x) => ({ ...x })), 'Reset bindings')} />
       </div>
     )}>
-      <p className="text-[11px] text-fg3 mb-2">What each tracked value drives. Parameter = tracked value × scale + offset (then clipped to the parameter’s range).</p>
+      <p className="text-[11px] text-fg3 mb-2">What each tracked value drives. Parameter = tracked value × scale + offset (then clipped to the parameter’s range). Hand values need “Track hands too” in Perform; they return to 0 when a hand isn’t seen.</p>
       {b.map((x, i) => (
         <div key={i} className="rounded-md bg-panel-2 p-1.5 mb-1.5 flex flex-col gap-1">
           <div className="flex items-center gap-1">
-            <Select small value={x.pose} onChange={(v) => set(b.map((q, k) => (k === i ? { ...q, pose: v } : q)), 'Binding')} options={POSE_KEYS.map((k) => ({ value: k, label: KEY_INFO[k].label }))} className="flex-1 min-w-0" />
+            <Select small value={x.pose} onChange={(v) => set(b.map((q, k) => (k === i ? { ...q, pose: v } : q)), 'Binding')} options={POSE_OPTIONS} className="flex-1 min-w-0" />
             {canEdit && <IconButton icon="close" label="Remove" size={22} iconSize={11} onClick={() => set(b.filter((_, k) => k !== i), 'Remove binding')} />}
           </div>
           <div className="flex items-center gap-1">

@@ -36,7 +36,7 @@ export function exportConfig({ engine, getDoc, getTimeSel, docId, name }) {
       const wav = encodeWav(a, fid === 'wav' ? Number(o.bits) : 24);
       if (fid === 'wav') return wav;
       onProgress?.(0, 'Uploading the mix…');
-      const asset = await saveBlob(wav, `${name || 'Mixdown'}.wav`, { docId, isExport: false, onProgress: (p) => onProgress?.(p, 'Uploading the mix…') });
+      const asset = await saveBlob(wav, `${name || 'Mixdown'}.wav`, { docId, isExport: false, autosave: true, onProgress: (p) => onProgress?.(p, 'Uploading the mix…') });
       return { job: { kind: 'transcode', name, spec: { asset_id: asset.id, preset: fid, output: { sample_rate: Number(o.sampleRate) } } } };
     },
   };

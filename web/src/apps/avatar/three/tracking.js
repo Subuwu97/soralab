@@ -1,12 +1,14 @@
 // Tracking → avatar. Turns the contract's pose (POSE_KEYS + pose.blend) into humanoid bone rotations, look-at and
 // expression weights, with the per-mapping sensitivity saved in the document (doc.tracking). When tracking goes quiet,
-// it fades into an idle loop (breathing, a little sway, blinking) so the avatar never freezes.
+// it fades into an idle loop (breathing, a little sway, blinking) so the avatar never freezes. Tracked hands move the
+// arms, wrists and fingers (./arms.js); when they're lost the arms ease back to the relaxed, arms-down idle pose.
 //
 // Directions (with "mirror" off): positive headYaw turns the head towards the viewer's right, positive headPitch looks
 // up, positive headRoll tilts the top of the head towards the viewer's right; eyeX/eyeY follow the same sides.
 // Turn "mirror" on to swap left and right (move like a reflection).
 import * as THREE from 'three';
 import { clamp } from './model.js';
+import { ArmDriver } from './arms.js';
 
 const D = THREE.MathUtils.DEG2RAD;
 const _e = new THREE.Euler();
@@ -24,6 +26,7 @@ export class Driver {
     this.nextBlink = 2; this.blinkT = -1;
     this.wiggle = 0;        // seconds left of the spring-bone test shake
     this.manual = null;     // test pose from the editor (wins over tracking)
+    this.arms = new ArmDriver(avatar);
   }
   setPose(pose) { this.pose = pose; this.poseAt = performance.now(); }
 
@@ -81,6 +84,8 @@ export class Driver {
         const sh = h.getNormalizedBoneNode(`${side}Shoulder`);
         if (sh) sh.quaternion.multiply(_q.setFromEuler(_e.set(0, 0, k * (breath - 0.5) * 1.2 * D)));
       }
+      // Tracked hands: arms reach (IK), wrists turn, fingers curl, blended over the idle arms above.
+      this.arms.apply(h, p, !!live, dt, s, m);
     }
 
     // ---- expressions

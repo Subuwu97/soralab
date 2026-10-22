@@ -208,7 +208,7 @@ export default function Editor2D({ project, h, doc, canEdit, ui }) {
   const onAutoRig = () => {
     const { doc: next, report: r } = autoRig(h.get());
     setReport(r);
-    if (next !== h.get()) { edit(() => next, 'Auto-rig face'); toast('Face rigged — try the Angle X / Eye L Open / Mouth Open sliders.', { type: 'success' }); }
+    if (next !== h.get()) { edit(() => next, 'Auto-rig face'); toast(`Face rigged${r.some((l) => l.startsWith('Arm')) ? ' (and arms)' : ''} — try the Angle X / Eye L Open / Mouth Open${r.some((l) => l.startsWith('Arm')) ? ' / Arm L A' : ''} sliders.`, { type: 'success' }); }
   };
 
   // ---------------------------------------------------------------- import

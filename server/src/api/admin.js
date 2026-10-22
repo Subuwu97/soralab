@@ -5,6 +5,8 @@ import { requireAdmin } from '../auth.js';
 import { fail, usageOf, quotaOf, userOut } from './util.js';
 import { renderInfo } from '../render.js';
 import { h } from './util.js';
+import { config } from '../config.js';
+import { cleanUp, lastCleanup } from './storage.js';
 
 export const admin = express.Router();
 admin.use(requireAdmin);
@@ -39,3 +41,13 @@ admin.get('/jobs', (req, res) => {
   res.json(db.prepare(`SELECT j.id, j.name, j.kind, j.status, j.progress, j.error, j.encoder, j.created_at, j.finished_at, u.name AS owner_name
     FROM jobs j JOIN users u ON u.id = j.owner ORDER BY j.created_at DESC LIMIT 200`).all());
 });
+
+// Storage cleanup (see storage.js): what it could free now, the last run, and "Clean up now" (or a dry run).
+admin.get('/storage', h(async (req, res) => {
+  const r = await cleanUp({ dryRun: true, cached: true });
+  res.json({ unused: { files: r.files, bytes: r.bytes }, last_run: lastCleanup(), grace_hours: config.cleanupGraceHours, every_hours: config.cleanupEveryHours });
+}));
+/** POST /api/admin/storage/cleanup { dry_run? } */
+admin.post('/storage/cleanup', express.json(), h(async (req, res) => {
+  res.json(await cleanUp({ dryRun: !!req.body?.dry_run, by: 'admin' }));
+}));

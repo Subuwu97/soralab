@@ -7,15 +7,23 @@
 //   tr.setPuppet(true)               mouse = head and eyes, hold the mouse button = talk, B = blink, ←/→ = tilt
 //   tr.settings = withTrackingDefaults(doc.tracking)       tr.neutral() → values for settings.neutral
 //   tr.inject({ blend, matrix })     feeds a face result by hand (tests, recorded data)
+//   tr.injectHands(hands, { size })  feeds a Hand Landmarker result by hand (same shape as the worker's, see hands.js)
+//   tr.gestures = doc.perform.gestures  gesture → expression triggers ({ exprId: { gesture, hand, mode } })
 //   tr.dispose()
+//
+// Hands (settings.hands, off by default because it roughly doubles the tracking work) add pose.handL / pose.handR and
+// their flat keys (../contract.js HAND_KEYS). They keep working while the face is lost, with the last known face as
+// the reference.
 import { rawPose, PoseShaper, setNeutral, withTrackingDefaults } from './pose.js';
 import { MicLipSync } from './mic.js';
+import { HandShaper } from './hands.js';
 
 export { withTrackingDefaults, defaultTracking, KEY_INFO, setNeutral, packPose, rawPose, PoseShaper } from './pose.js';
+export { HandShaper, HAND_KEY_INFO, GESTURES, GESTURE_LABELS, demoHand } from './hands.js';
 
 export class Tracker {
-  constructor({ onPose, onStatus } = {}) {
-    this.onPose = onPose; this.onStatus = onStatus;
+  constructor({ onPose, onStatus, onExpr } = {}) {
+    this.onPose = onPose; this.onStatus = onStatus; this.onExpr = onExpr;
     this.settings = withTrackingDefaults(null);
     this.shaper = new PoseShaper();
     this.mic = new MicLipSync();
@@ -23,6 +31,8 @@ export class Tracker {
     this.raw = null; this.rawAt = 0; this.landmarks = null; this.hands = null;
     this.puppet = { on: false, x: 0, y: 0, talk: false, blinkUntil: 0, nextBlink: 0, roll: 0 };
     this.expr = {}; // expression weights from hotkeys, passed through as pose.expr
+    this.handShaper = new HandShaper();
+    this.gestures = {}; this.gestureExpr = {}; this.gestureWas = {}; // gesture → expression triggers
     this.alive = true;
     const loop = () => { if (!this.alive) return; this.tick(); this.raf = requestAnimationFrame(loop); };
     this.raf = requestAnimationFrame(loop);
@@ -65,19 +75,25 @@ export class Tracker {
     return new Promise((resolve, reject) => {
       this.readyWait = { resolve, reject };
       this.worker.onerror = (e) => { e.preventDefault?.(); reject(new Error(e.message || 'the tracking worker failed')); };
-      this.worker.postMessage({ t: 'init', origin: location.origin, withHands: !!this.settings.hands });
+      this.worker.postMessage({ t: 'init', origin: location.origin, withHands: !!this.settings.hands, handConfidence: this.settings.handConfidence });
     });
   }
+  /** Loads or drops the hand model when the setting changes (the camera keeps running). */
   syncHands() {
-    if (this.handsOn === !!this.settings.hands || !this.worker) return Promise.resolve();
-    this.handsOn = !!this.settings.hands;
-    this.worker.postMessage({ t: 'init', origin: location.origin, withHands: this.handsOn });
+    const want = `${!!this.settings.hands}|${this.settings.handConfidence}`;
+    if (this.handsSig === want || !this.worker || !this.workerReady) return Promise.resolve();
+    this.handsSig = want; this.resyncing = true;
+    if (!this.settings.hands) { this.hands = null; this.handShaper.reset(); }
+    else this.setStatus({ message: this.status.camera === 'tracking' ? 'Loading hand tracking…' : this.status.message });
+    this.worker.postMessage({ t: 'init', origin: location.origin, withHands: !!this.settings.hands, handConfidence: this.settings.handConfidence });
     return Promise.resolve();
   }
   onWorker(d) {
     if (d.t === 'ready') {
       this.workerReady = true; this.handsOn = d.hands;
-      this.setStatus({ delegate: d.delegate, camera: this.stream ? 'searching' : this.status.camera, message: this.stream ? 'Looking for your face…' : '' });
+      this.handsSig ||= `${!!this.settings.hands}|${this.settings.handConfidence}`;
+      if (this.resyncing) { this.resyncing = false; this.setStatus({ hands: d.hands, message: this.status.camera === 'tracking' ? '' : this.status.message }); return; }
+      this.setStatus({ delegate: d.delegate, hands: d.hands, camera: this.stream ? 'searching' : this.status.camera, message: this.stream ? 'Looking for your face…' : '' });
       this.readyWait?.resolve(); this.readyWait = null;
     } else if (d.t === 'error') {
       this.busy = false;
@@ -87,8 +103,8 @@ export class Tracker {
       const now = performance.now();
       this.frames = (this.frames || 0) + 1;
       if (now - (this.fpsAt || 0) > 1000) { this.setStatus({ fps: Math.round((this.frames * 1000) / (now - (this.fpsAt || now - 1000))) }); this.fpsAt = now; this.frames = 0; }
-      this.hands = d.hands;
       if (d.face) this.useFace(d.face);
+      if (d.hands && this.settings.hands) this.useHands(d.hands, d.size);
       else if (this.status.camera === 'tracking' && now - this.rawAt > 600) this.setStatus({ camera: 'searching', message: 'Looking for your face…' });
     }
   }
@@ -111,13 +127,19 @@ export class Tracker {
   }
   useFace(face) {
     this.landmarks = face.landmarks || null;
+    if (face.matrix?.length >= 16) this.faceZ = face.matrix[14];
     this.raw = rawPose(face);
-    if (this.hands) this.raw.hands = this.hands;
     this.rawAt = performance.now();
     if (this.status.camera !== 'tracking') this.setStatus({ camera: 'tracking', message: '' });
   }
+  useHands(hands, size) {
+    this.hands = hands; this.handSize = size; this.handsAt = performance.now();
+    this.handShaper.update(hands, { landmarks: this.landmarks, size, faceZ: this.faceZ }, this.settings, performance.now() / 1000);
+  }
   /** For tests and recorded data: use this face result as if the camera saw it. */
   inject(face) { this.useFace(face); }
+  /** For tests and recorded data: a Hand Landmarker result ([{ label, score, pts, world }]), as if the camera saw it. */
+  injectHands(hands, { size = [640, 480] } = {}) { this.useHands(hands, size); }
   /** The current raw values as a neutral calibration (null when nothing is tracked). */
   neutral() { return this.raw ? setNeutral(this.raw) : null; }
 
@@ -171,16 +193,46 @@ export class Tracker {
       raw.mouthOpen = Math.max(raw.mouthOpen || 0, m.mouthOpen);
       if (s.mic.visemes) for (const k of ['mouthA', 'mouthI', 'mouthU', 'mouthE', 'mouthO']) raw[k] = Math.max(raw[k] || 0, m[k] || 0);
     }
-    if (!raw) { this.onPose?.(this.idle(now), { source: 'idle', mic: m?.level || 0 }); return; }
+    if (!raw) { this.onPose?.(this.withHands(this.idle(now), now), { source: 'idle', mic: m?.level || 0 }); return; }
     const shaped = this.shaper.shape(raw.noMirror ? { ...raw } : raw, raw.noMirror ? { ...s, mirror: false, neutral: {} } : s, now / 1000);
     if (Object.keys(this.expr).length) shaped.expr = { ...this.expr };
-    this.onPose?.(shaped, { source: fresh ? 'camera' : this.puppet.on ? 'puppet' : 'mic', mic: m?.level || 0 });
+    this.onPose?.(this.withHands(shaped, now), { source: fresh ? 'camera' : this.puppet.on ? 'puppet' : 'mic', mic: m?.level || 0 });
   }
   /** Nothing tracked: just breathe (and keep expressions). */
   idle(now) {
     const p = this.shaper.shape({}, { ...this.settings, bodyFollow: 0 }, now / 1000);
     if (Object.keys(this.expr).length) p.expr = { ...this.expr };
     return p;
+  }
+  /** Adds the hands (when they're on) and the expressions their gestures trigger. */
+  withHands(pose, now) {
+    if (!this.settings.hands) { this.gestureExpr = {}; return pose; }
+    Object.assign(pose, this.handShaper.shape(this.settings, now / 1000));
+    const dt = Math.min(0.25, (now - (this.gestureT || now)) / 1000); this.gestureT = now;
+    const seen = (side, g) => { const h = pose[`hand${side}`]; return !!h && h.visible > 0.5 && h.gesture === g; };
+    let toggled = false;
+    for (const [xid, g] of Object.entries(this.gestures || {})) {
+      if (!g?.gesture) { delete this.gestureExpr[xid]; continue; }
+      const on = (g.hand !== 'R' && seen('L', g.gesture)) || (g.hand !== 'L' && seen('R', g.gesture));
+      if (g.mode === 'toggle') {
+        // each time the gesture starts, the expression flips on or off
+        if (on && !this.gestureWas[xid]) { if (this.expr[xid]) delete this.expr[xid]; else this.expr[xid] = 1; toggled = true; }
+        delete this.gestureExpr[xid];
+      } else {
+        // hold: on while the gesture is shown, fading in and out over about a fifth of a second
+        const w = this.gestureExpr[xid] || 0; const nw = w + ((on ? 1 : 0) - w) * (1 - Math.exp(-dt * (on ? 14 : 6)));
+        if (nw < 0.005 && !on) delete this.gestureExpr[xid]; else this.gestureExpr[xid] = nw;
+      }
+      this.gestureWas[xid] = on;
+    }
+    for (const xid of Object.keys(this.gestureExpr)) if (!this.gestures?.[xid]) delete this.gestureExpr[xid];
+    if (Object.keys(this.gestureExpr).length || toggled) {
+      const ex = { ...this.expr };
+      for (const [k, v] of Object.entries(this.gestureExpr)) ex[k] = Math.max(ex[k] || 0, v);
+      pose.expr = ex;
+    }
+    if (toggled) this.onExpr?.({ ...this.expr });
+    return pose;
   }
 
   dispose() {

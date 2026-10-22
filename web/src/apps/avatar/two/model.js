@@ -33,7 +33,18 @@ export const STD_PARAMS = [
   ['ParamBodyAngleX', 'Body X', -10, 0, 10], ['ParamBodyAngleY', 'Body Y', -10, 0, 10], ['ParamBodyAngleZ', 'Body Z', -10, 0, 10],
   ['ParamBreath', 'Breath', 0, 0, 1],
   ['ParamHairFront', 'Hair Front', -1, 0, 1], ['ParamHairSide', 'Hair Side', -1, 0, 1], ['ParamHairBack', 'Hair Back', -1, 0, 1],
+  // Arms and hands (driven by hand tracking; L is the avatar's left, on the screen's right). Angles in degrees,
+  // "outward" positive on both sides: ArmA the upper arm from hanging down, ArmB the forearm from the upper arm's line,
+  // Hand the wrist from the forearm's line. The gesture ones are 0..1 weights, X/Y follow the wrist's position.
+  ...['L', 'R'].flatMap((S) => [
+    [`ParamArm${S}A`, `Arm ${S} A (upper)`, -45, 0, 135], [`ParamArm${S}B`, `Arm ${S} B (forearm)`, -150, 0, 150], [`ParamHand${S}`, `Hand ${S} (wrist)`, -80, 0, 80],
+    [`ParamHand${S}Fist`, `Hand ${S} Closed`, 0, 0, 1], [`ParamHand${S}Peace`, `Hand ${S} Peace`, 0, 0, 1], [`ParamHand${S}Point`, `Hand ${S} Point`, 0, 0, 1],
+    [`ParamHand${S}ThumbUp`, `Hand ${S} Thumbs up`, 0, 0, 1], [`ParamHand${S}X`, `Hand ${S} X`, -1, 0, 1], [`ParamHand${S}Y`, `Hand ${S} Y`, -1, 0, 1],
+  ]),
 ];
+// The arm/hand parameters: new documents don't get them (most avatars are bust-ups); auto-rig adds them when it finds
+// arm or hand parts, and the Parameters panel offers them.
+export const HAND_PARAM_IDS = new Set(STD_PARAMS.filter(([id]) => /^Param(Arm|Hand)[LR]/.test(id)).map(([id]) => id));
 export const stdParam = (id) => {
   const s = STD_PARAMS.find((p) => p[0] === id);
   if (!s) return null;
@@ -48,6 +59,9 @@ export const DEFAULT_BINDINGS = [
   ['eyeLOpen', 'ParamEyeLOpen'], ['eyeROpen', 'ParamEyeROpen'], ['eyeX', 'ParamEyeBallX'], ['eyeY', 'ParamEyeBallY'],
   ['browL', 'ParamBrowLY'], ['browR', 'ParamBrowRY'], ['mouthOpen', 'ParamMouthOpenY'], ['mouthForm', 'ParamMouthForm'],
   ['cheek', 'ParamCheek'], ['breath', 'ParamBreath'],
+  // hands (only when Perform tracks them; the keys are already back at 0 when a hand isn't seen)
+  ...['L', 'R'].flatMap((S) => [[`arm${S}A`, `ParamArm${S}A`], [`arm${S}B`, `ParamArm${S}B`], [`hand${S}Angle`, `ParamHand${S}`], [`hand${S}Fist`, `ParamHand${S}Fist`],
+    [`hand${S}Peace`, `ParamHand${S}Peace`], [`hand${S}Point`, `ParamHand${S}Point`], [`hand${S}ThumbUp`, `ParamHand${S}ThumbUp`], [`hand${S}X`, `ParamHand${S}X`], [`hand${S}Y`, `ParamHand${S}Y`]]),
 ].map(([pose, param]) => ({ pose, param, scale: 1, offset: 0 }));
 
 // The parts a face rig needs, and the names people usually give those layers (English and Japanese).
@@ -56,6 +70,11 @@ export const DEFAULT_BINDINGS = [
 export const ROLES = [
   { id: 'face', label: 'Face', re: /^(face|skin|head|顔|輪郭|かお)/i },
   { id: 'neck', label: 'Neck', re: /(neck|首)/i },
+  // arms and hands (optional: auto-rig adds arm rotation when it finds them). Forearm before upper arm: "arm" alone
+  // (or 腕) means the whole arm, which auto-rig turns at the shoulder.
+  { id: 'lowerArm', label: 'Forearm', side: true, optional: true, re: /(fore\s*arm|lower\s*arm|arm\s*low|前腕)/i },
+  { id: 'upperArm', label: 'Upper arm', side: true, optional: true, re: /(upper\s*arm|(^|[^a-z])arms?([^a-z]|$)|sleeve|上腕|二の腕|腕|袖)/i },
+  { id: 'hand', label: 'Hand', side: true, optional: true, re: /((^|[^a-z])hands?([^a-z]|$)|palm|fist|手(?!首)|てのひら)/i },
   { id: 'body', label: 'Body', re: /(body|torso|chest|clothes|体|胴|服|からだ)/i },
   { id: 'mouthUpper', label: 'Mouth (upper lip)', re: /(upper\s*lip|mouth\s*up|lip\s*top|上唇|口上)/i },
   { id: 'mouthLower', label: 'Mouth (lower lip)', re: /(lower\s*lip|mouth\s*(low|bottom)|lip\s*bottom|下唇|口下)/i },
@@ -104,7 +123,7 @@ export function emptyDoc2D(meta = {}) {
   return {
     version: 1, kind: '2d', width: meta.width || 2048, height: meta.height || 2048,
     parts: [], groups: [], deformers: [],
-    params: STD_PARAMS.map(([id]) => stdParam(id)),
+    params: STD_PARAMS.filter(([id]) => !HAND_PARAM_IDS.has(id)).map(([id]) => stdParam(id)),
     physics: [], expressions: [], bindings: DEFAULT_BINDINGS.map((b) => ({ ...b })),
   };
 }

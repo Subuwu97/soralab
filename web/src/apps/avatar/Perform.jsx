@@ -1,19 +1,23 @@
 // Perform mode, shared by every kind of avatar: the webcam drives the model live. Camera face tracking (MediaPipe),
 // mic lip-sync, a mouse/keyboard puppet when there's no camera, calibration ("Set neutral"), per-value tuning,
-// expression hotkeys, a background (colour, chroma green or transparent), PNG snapshots and WebM recording, and the
-// output link for OBS (a Browser Source page that receives the pose through the server relay) or a pop-out window.
+// expression hotkeys and hand-gesture triggers, a background (colour, chroma green or transparent), PNG snapshots and
+// WebM recording, and the output link for OBS (a Browser Source page that receives the pose through the server relay)
+// or a pop-out window.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, IconButton, Select, Slider, Toggle, Segmented, ColorSwatch, NumberInput, PanelSection, TextInput, Checkbox, toast, toastError, confirmDialog, cx } from '../../components/ui.jsx';
 import { api, download, saveBlob } from '../../lib/api.js';
 import { useSize } from '../../components/ui.jsx';
 import { POSE_KEYS } from './contract.js';
-import { Tracker, withTrackingDefaults, KEY_INFO, packPose } from './tracking/index.js';
+import { Tracker, withTrackingDefaults, KEY_INFO, packPose, GESTURE_LABELS } from './tracking/index.js';
+import { GestureInput, withGesture } from './gestures.jsx';
 import { createStage } from './stage.js';
 import { relaySender } from './relay.js';
 import { HotkeyInput } from './two/Panels2D.jsx';
 
-export const defaultPerform = () => ({ bg: { mode: 'color', color: '#1d1f26' }, framing: { zoom: 1, x: 0, y: 0 }, hotkeys: {}, output: { width: 1920, height: 1080 } });
-export const withPerformDefaults = (p) => { const d = defaultPerform(); return { ...d, ...p, bg: { ...d.bg, ...p?.bg }, framing: { ...d.framing, ...p?.framing }, output: { ...d.output, ...p?.output }, hotkeys: { ...p?.hotkeys } }; };
+export const defaultPerform = () => ({ bg: { mode: 'color', color: '#1d1f26' }, framing: { zoom: 1, x: 0, y: 0 }, hotkeys: {}, gestures: {}, output: { width: 1920, height: 1080 } });
+export const withPerformDefaults = (p) => { const d = defaultPerform(); return { ...d, ...p, bg: { ...d.bg, ...p?.bg }, framing: { ...d.framing, ...p?.framing }, output: { ...d.output, ...p?.output }, hotkeys: { ...p?.hotkeys }, gestures: { ...p?.gestures } }; };
+// Finger bones of the 21 hand landmarks, for the camera preview.
+const HAND_LINES = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]];
 export const bgCss = (bg) => (bg.mode === 'transparent' ? null : bg.mode === 'green' ? '#00ff00' : bg.color || '#1d1f26');
 export const outputUrl = (id, key, extra = {}) => `${location.origin}/avatar/${id}/output?${new URLSearchParams({ key, ...extra })}`;
 
@@ -69,6 +73,7 @@ export default function Perform({ project, h, doc, canEdit, ui }) {
         if (relay.current && now - (relay.current.at || 0) > 32) { relay.current.at = now; relay.current.send({ t: 'pose', p: packPose(pose) }); }
       },
       onStatus: setStatus,
+      onExpr: (ex) => setExprOn(ex), // a gesture toggled an expression
     });
     tracker.current = t;
     window.__avatarTracker = t; // handy for tests and debugging
@@ -77,6 +82,7 @@ export default function Perform({ project, h, doc, canEdit, ui }) {
     return () => { clearInterval(iv); t.dispose(); tracker.current = null; };
   }, []);
   useEffect(() => { if (tracker.current) { tracker.current.settings = tracking; tracker.current.syncHands?.(); } }, [tracking]);
+  useEffect(() => { if (tracker.current) tracker.current.gestures = perform.gestures; }, [perform.gestures]);
   // camera preview with the face landmarks on top
   useEffect(() => {
     let raf = 0;
@@ -90,6 +96,16 @@ export default function Perform({ project, h, doc, canEdit, ui }) {
       ctx.drawImage(v, 0, 0, c.width, c.height);
       const lm = t.landmarks;
       if (lm) { ctx.fillStyle = 'rgba(90,180,255,.95)'; for (let i = 0; i < lm.length; i += 3 * 2) ctx.fillRect(lm[i] * c.width - 1, lm[i + 1] * c.height - 1, 2, 2); }
+      // hands: the 21 points joined up (only while fresh)
+      if (t.settings.hands && t.hands?.length && performance.now() - (t.handsAt || 0) < 300) {
+        ctx.lineWidth = 1.5;
+        for (const hd of t.hands) {
+          ctx.strokeStyle = hd.label === 'Left' ? 'rgba(255,170,80,.95)' : 'rgba(120,255,160,.95)';
+          ctx.beginPath();
+          for (const [a, b] of HAND_LINES) { ctx.moveTo(hd.pts[a][0] * c.width, hd.pts[a][1] * c.height); ctx.lineTo(hd.pts[b][0] * c.width, hd.pts[b][1] * c.height); }
+          ctx.stroke();
+        }
+      }
       ctx.restore();
     };
     raf = requestAnimationFrame(draw);
@@ -226,7 +242,15 @@ export default function Perform({ project, h, doc, canEdit, ui }) {
           <Select small value={cam} onChange={setCam} options={[{ value: '', label: 'Default camera' }, ...devices.video.filter((d) => d.deviceId).map((d, i) => ({ value: d.deviceId, label: d.label || `Camera ${i + 1}` }))]} />
           <Select small value={micDev} onChange={setMicDev} options={[{ value: '', label: 'Default microphone' }, ...devices.audio.filter((d) => d.deviceId).map((d, i) => ({ value: d.deviceId, label: d.label || `Microphone ${i + 1}` }))]} />
           <Toggle label="Show camera preview" checked={showCam} onChange={setShowCam} />
-          <Toggle label="Track hands too" checked={t.hands} onChange={(v) => setTracking({ hands: v })} />
+          <Toggle label="Track hands too" checked={t.hands} onChange={(v) => setTracking({ hands: v }, v ? 'Hand tracking on' : 'Hand tracking off')} />
+          <p className="text-[11px] text-fg3 -mt-0.5">{t.hands ? 'Arms and fingers follow your hands; gestures can trigger expressions (see Expressions). It roughly doubles the tracking work, so turn it off on slower computers.' : 'Off by default: hand tracking roughly doubles the CPU/GPU work. Turn it on to move the avatar’s arms and fingers and to trigger expressions with gestures.'}</p>
+          {t.hands && (
+            <>
+              <Slider label="Hand confidence" value={Math.round(t.handConfidence * 100)} min={10} max={95} unit="%" onChange={(v) => setTracking({ handConfidence: v / 100 }, 'Hand confidence', 'hc')} />
+              <Slider label="Hand steadiness" value={Math.round(t.handSmooth * 100)} min={50} max={400} unit="%" onChange={(v) => setTracking({ handSmooth: v / 100 }, 'Hand steadiness', 'hs')} />
+              <div className="text-[11px] text-fg3" data-testid="av-hand-readout">{['L', 'R'].map((S) => { const hd = readout[`hand${S}`]; return `${S === 'L' ? 'Left' : 'Right'}: ${hd?.visible > 0.5 ? (GESTURE_LABELS[hd.gesture] || 'hand') : '—'}`; }).join(' · ')}</div>
+            </>
+          )}
           <div className="text-[11px] text-fg3">Mic level <span className="inline-block align-middle w-24 h-1.5 bg-chip rounded overflow-hidden"><span className="block h-full bg-ok" style={{ width: `${Math.min(100, (tracker.current?.mic.level || 0) * 600)}%` }} /></span></div>
           <Slider label="Mic sensitivity" value={Math.round(t.mic.gain * 100)} min={10} max={400} unit="%" onChange={(v) => setTracking({ mic: { ...t.mic, gain: v / 100 } }, 'Mic', 'mg')} />
           <Slider label="Mic noise gate" value={Math.round(t.mic.threshold * 1000)} min={0} max={200} onChange={(v) => setTracking({ mic: { ...t.mic, threshold: v / 1000 } }, 'Mic', 'mt')} />
@@ -235,12 +259,16 @@ export default function Perform({ project, h, doc, canEdit, ui }) {
       </PanelSection>
       <PanelSection title="Expressions" id="avp-expr">
         {!exprList.length && <p className="text-[11px] text-fg3">This model has no expressions{doc.kind === '2d' ? ' yet — make some in Edit → Face' : ''}.</p>}
+        {exprList.length > 0 && <p className="text-[11px] text-fg3 mb-1">A hotkey or a hand gesture (with “Track hands too” on) can turn each one on.</p>}
         {exprList.map((x) => (
-          <div key={x.id} className="flex items-center gap-1.5 h-8">
-            <Toggle checked={!!exprOn[x.id]} onChange={() => toggleExpr(x.id)} />
-            <span className="flex-1 truncate text-[13px]">{x.name}</span>
-            <HotkeyInput value={perform.hotkeys[x.id]?.key || ''} disabled={!canEdit} onChange={(k) => setPerform({ hotkeys: { ...perform.hotkeys, [x.id]: { mode: 'toggle', ...perform.hotkeys[x.id], key: k } } }, 'Expression hotkey')} />
-            <Select small value={perform.hotkeys[x.id]?.mode || 'toggle'} onChange={(v) => setPerform({ hotkeys: { ...perform.hotkeys, [x.id]: { key: '', ...perform.hotkeys[x.id], mode: v } } }, 'Expression hotkey')} options={[{ value: 'toggle', label: 'Toggle' }, { value: 'hold', label: 'Hold' }]} />
+          <div key={x.id} className="py-1 border-b border-line/60" data-testid={`av-expr-${x.id}`}>
+            <div className="flex items-center gap-1.5 h-8">
+              <Toggle checked={!!exprOn[x.id]} onChange={() => toggleExpr(x.id)} />
+              <span className="flex-1 truncate text-[13px]">{x.name}</span>
+              <HotkeyInput value={perform.hotkeys[x.id]?.key || ''} disabled={!canEdit} onChange={(k) => setPerform({ hotkeys: { ...perform.hotkeys, [x.id]: { mode: 'toggle', ...perform.hotkeys[x.id], key: k } } }, 'Expression hotkey')} />
+              <Select small value={perform.hotkeys[x.id]?.mode || 'toggle'} onChange={(v) => setPerform({ hotkeys: { ...perform.hotkeys, [x.id]: { key: '', ...perform.hotkeys[x.id], mode: v } } }, 'Expression hotkey')} options={[{ value: 'toggle', label: 'Toggle' }, { value: 'hold', label: 'Hold' }]} />
+            </div>
+            <GestureInput value={perform.gestures[x.id]} disabled={!canEdit} onChange={(g) => setPerform({ gestures: withGesture(perform.gestures, x.id, g) }, 'Gesture trigger')} />
           </div>
         ))}
       </PanelSection>
@@ -284,7 +312,7 @@ export default function Perform({ project, h, doc, canEdit, ui }) {
     <>
       {ui.portal('options', options)}
       {ui.portal('panels', panels)}
-      {ui.portal('status', <><span>Perform</span><span>{status.camera === 'tracking' ? 'Face tracked' : status.puppet ? 'Puppet' : 'Idle'}</span>{status.mic && <span>Mic lip-sync</span>}{watchers > 0 && <span className="text-ok">OBS output live</span>}</>)}
+      {ui.portal('status', <><span>Perform</span><span>{status.camera === 'tracking' ? 'Face tracked' : status.puppet ? 'Puppet' : 'Idle'}</span>{t.hands && <span>{status.hands ? 'Hands on' : 'Hands (start the camera)'}</span>}{status.mic && <span>Mic lip-sync</span>}{watchers > 0 && <span className="text-ok">OBS output live</span>}</>)}
       <div ref={box} className="absolute inset-0" data-puppet-area="1"
         style={bgMode === 'transparent' ? { background: 'repeating-conic-gradient(#2a2b31 0% 25%, #1f2026 0% 50%) 50% / 24px 24px' } : undefined}>
         <canvas ref={canvas} className="absolute inset-0 w-full h-full" data-testid="av-stage" />

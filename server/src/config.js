@@ -43,6 +43,9 @@ export const config = {
   videoEncoder: process.env.VIDEO_ENCODER || 'auto',
   renderJobs: Math.max(1, Number(process.env.RENDER_JOBS || 1)),
   versionsPerDoc: Number(process.env.VERSIONS_PER_DOC || 50),
+  // Storage cleanup (api/storage.js): how often it runs (0 = only when asked) and how old an unused autosaved file must be.
+  cleanupEveryHours: Number(process.env.CLEANUP_EVERY_HOURS ?? 6),
+  cleanupGraceHours: Math.max(1, Number(process.env.CLEANUP_GRACE_HOURS || 24)),
   // HTTPS on the home network (set by the suite's setup; needed for the mic): see lan-https.js.
   httpsPort: Number(process.env.HTTPS_PORT || 0),
   tlsCert: process.env.TLS_CERT ? path.resolve(ROOT, process.env.TLS_CERT) : '',

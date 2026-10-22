@@ -6,6 +6,17 @@ import { defaultAssetUrl } from './load.js';
 import { PRESET_LABELS as LABELS } from './model.js';
 
 const SMOOTH = 16; // 1/s: higher = snappier, lower = smoother
+// Eases a tracked hand's numbers (and its vectors and finger curls) the same way; the gesture and flags switch at once.
+function easeHand(cur, next, k) {
+  if (!next) return null;
+  if (!cur) return { ...next, dir: next.dir?.slice(), side: next.side?.slice(), curl: next.curl?.slice() };
+  const o = { ...next };
+  for (const [key, v] of Object.entries(next)) {
+    if (Number.isFinite(v) && Number.isFinite(cur[key])) o[key] = cur[key] + (v - cur[key]) * k;
+    else if (Array.isArray(v) && Array.isArray(cur[key]) && cur[key].length === v.length) o[key] = v.map((x, i) => cur[key][i] + (x - cur[key][i]) * k);
+  }
+  return o;
+}
 
 export async function createStage(canvas, doc, { assetUrl = defaultAssetUrl, background = null } = {}) {
   const vp = new Viewport(canvas, { alpha: true });
@@ -36,7 +47,8 @@ export async function createStage(canvas, doc, { assetUrl = defaultAssetUrl, bac
         if (key === 'blend' && v) { for (const [b, x] of Object.entries(v)) cur.blend[b] = (cur.blend[b] ?? x) + (x - (cur.blend[b] ?? x)) * k; continue; }
         if (Number.isFinite(v)) cur[key] = (Number.isFinite(cur[key]) ? cur[key] : v) + (v - (Number.isFinite(cur[key]) ? cur[key] : v)) * k;
       }
-      avatar.setPose({ ...cur, blend: target.blend ? cur.blend : undefined, expr: target.expr });
+      cur.handL = easeHand(cur.handL, target.handL, k); cur.handR = easeHand(cur.handR, target.handR, k);
+      avatar.setPose({ ...cur, blend: target.blend ? cur.blend : undefined, expr: target.expr, handL: cur.handL || undefined, handR: cur.handR || undefined });
     }
     avatar.update(dt);
     vp.render();
