@@ -1,14 +1,18 @@
 // The Live2D player: Cubism Core does the model maths (the person adds Core themselves, see core.js); we draw its
 // drawables with a small WebGL2 renderer of our own (textured meshes in render order, clipping masks incl. inverted,
 // normal / additive / multiplicative blending, multiply and screen colours), and drive the standard Cubism parameters
-// from the tracking pose, with the model's own physics, expressions and idle motion.
+// from the tracking pose, with the model's own physics, expressions (fading), motions (fading, with priorities, the idle
+// group looping when nothing else plays) and pose part switching (see anim.js).
 //
 // createStageLive2D(canvas, doc, { assetUrl, coreUrl }) → the stage from ../contract.js, plus
-//   info() → { parameters: [{ id, min, max, def }], drawables, motions: { group: count }, version }
-//   setOverrides({ paramId: value }), playMotion(group, i), expressions(), setIdle(group|null)
+//   info() → { parameters: [{ id, min, max, def }], parts, drawables, motions: { group: count }, pose, version }
+//   setOverrides({ paramId: value }), playMotion(group, i, priority = 'force') → Promise<started?>, setIdle(group|null),
+//   expressions() (expressions, then one entry per motion for hotkeys), setExpression(k, weight), values(), parts()
+// Hotkeys reach the stage (and OBS output pages) through pose.expr: 'exp:<k>' is on while set; 'motion:<group>:<i>'
+// holds a press counter, and each new count plays that motion (positive: Force, it interrupts; negative: Normal).
 import { loadCore } from './core.js';
 import { loadModelFiles } from './files.js';
-import { Live2DPhysics, applyExp3, parseMotion, applyMotion } from './anim.js';
+import { Live2DPhysics, ExpressionPlayer, MotionPlayer, PosePlayer, PRIORITY, parseMotion } from './anim.js';
 
 // Tracking → Cubism's standard parameter IDs (scale applied to the pose value).
 export const LIVE2D_BINDINGS = [
@@ -96,16 +100,34 @@ export async function createStageLive2D(canvas, doc, { assetUrl, coreUrl } = {})
   // ---------------------------------------------------------------- state
   let pose = {}; let bg = null; let framing = { zoom: 1, x: 0, y: 0 }; let overrides = null; let alive = true; let raf = 0; let last = performance.now();
   const expW = new Array(files.expressions.length).fill(0);
+  const expressions = new ExpressionPlayer(files.expressions);
   const motions = Object.fromEntries(Object.entries(files.motions).map(([g, list]) => [g, list.map((m) => ({ ...m, parsed: null }))]));
-  let motion = null; let motionT = 0; let idleGroup = doc.idle ?? (motions.Idle ? 'Idle' : Object.keys(motions).find((g) => /idle/i.test(g)) || null);
+  const player = new MotionPlayer();
+  let idleGroup = doc.idle !== undefined ? doc.idle : (motions.Idle ? 'Idle' : Object.keys(motions).find((g) => /idle/i.test(g)) || null);
   const bindings = doc.bindings?.length ? doc.bindings : LIVE2D_BINDINGS;
   const lipIds = (files.groups.find((g) => g.Name === 'LipSync')?.Ids) || [];
-  const startMotion = async (group, i = 0) => {
-    const m = motions[group]?.[i]; if (!m) { motion = null; return; }
-    m.parsed ||= parseMotion(await m.load());
-    motion = { group, m: m.parsed }; motionT = 0;
+  const partIds = Array.from(model.parts.ids);
+  const posePlayer = files.pose ? new PosePlayer(files.pose, partIds) : null;
+  const partParams = {};   // part id → visibility asked for by motions (kept between frames, like Cubism's part parameters)
+  /** Plays motion i of a group at a priority ('idle' | 'normal' | 'force'); resolves to whether it started. */
+  const startMotion = async (group, i = 0, priority = 'force') => {
+    const m = motions[group]?.[i]; const pr = PRIORITY[priority] ?? PRIORITY.force;
+    if (!m || !player.reserve(pr)) return false;
+    try { m.parsed ||= parseMotion(await m.load(), { fadeIn: m.fadeIn, fadeOut: m.fadeOut }); } catch (e) { player.cancel(pr); throw e; }
+    if (!alive) return false;
+    player.start(m.parsed, pr);
+    return true;
   };
-  if (idleGroup) startMotion(idleGroup, 0).catch(() => {});
+  // the idle group: a random motion from it whenever nothing else plays (Cubism's sample apps do the same)
+  let idleLoading = false;
+  const idle = () => {
+    const list = idleGroup && motions[idleGroup];
+    if (!list?.length || idleLoading || !player.isFinished()) return;
+    idleLoading = true;
+    startMotion(idleGroup, Math.floor(Math.random() * list.length), 'idle').catch(() => {}).finally(() => { idleLoading = false; });
+  };
+  const triggers = {}; // motion hotkey counters seen
+  const motionKeys = Object.entries(motions).flatMap(([g, list]) => list.map((_, i) => `motion:${g}:${i}`));
 
   // model units → clip space: Cubism's canvas (y up), fitted into our canvas with the framing
   const matrix = () => {
@@ -122,21 +144,32 @@ export async function createStageLive2D(canvas, doc, { assetUrl, coreUrl } = {})
   const frame = () => {
     const now = performance.now(); const dt = Math.min(0.1, (now - last) / 1000); last = now;
     for (let i = 0; i < info.ids.length; i++) values[info.ids[i]] = info.def[i];
-    const partOp = {};
-    if (motion) { motionT += dt; applyMotion(motion.m, motionT, values, partOp); if (!motion.m.loop && motionT > motion.m.duration) { motion = null; if (idleGroup) startMotion(idleGroup, 0).catch(() => {}); } }
+    // motion hotkeys: a new press count plays the motion (the first count seen by a late OBS page is only noted)
+    for (const k of motionKeys) {
+      const v = pose.expr?.[k]; if (!v || v === triggers[k]) continue;
+      const first = triggers[k] === undefined; triggers[k] = v;
+      if (first && Math.abs(v) !== 1) continue;
+      const [, g, i] = /^motion:(.*):(\d+)$/.exec(k);
+      startMotion(g, +i, v > 0 ? 'force' : 'normal').catch(() => {});
+    }
+    idle();
+    player.update(values, partParams, dt);
     for (const b of bindings) {
       const x = pose[b.pose]; const i = info.index.get(b.param);
       if (i === undefined || !Number.isFinite(x)) continue;
       values[b.param] = Math.max(info.min[i], Math.min(info.max[i], x * (b.scale ?? 1) + (b.offset || 0)));
     }
     if (Number.isFinite(pose.mouthOpen)) for (const id of lipIds) if (info.index.has(id)) values[id] = Math.max(values[id] ?? 0, pose.mouthOpen);
-    // expressions: from hotkeys (pose.expr = { 'exp:<index>': 1 }) plus any set by the editor
-    const w = expW.slice(); for (const [k, v] of Object.entries(pose.expr || {})) { const m = /^exp:(\d+)$/.exec(k); if (m) w[+m[1]] = Math.max(w[+m[1]] || 0, v); }
-    applyExp3(values, files.expressions, w, info);
+    // expressions: from hotkeys (pose.expr = { 'exp:<index>': 1 }) plus any set by the editor; they fade in and out
+    for (let k = 0; k < expW.length; k++) expressions.set(k, expW[k] > 0 || pose.expr?.[`exp:${k}`] > 0);
+    expressions.update(values, dt, info);
     physics?.step(values, dt);
     if (overrides) Object.assign(values, overrides);
-    for (let i = 0; i < info.ids.length; i++) P.values[i] = values[info.ids[i]];
-    for (const [id, v] of Object.entries(partOp)) { const i = partIndex.get(id); if (i !== undefined) model.parts.opacities[i] = v; }
+    for (let i = 0; i < info.ids.length; i++) P.values[i] = Math.max(info.min[i], Math.min(info.max[i], values[info.ids[i]]));
+    // parts: the pose switches its groups; motions' PartOpacity curves set any other part directly
+    const op = model.parts.opacities;
+    posePlayer?.update(partParams, op, dt);
+    for (const [id, v] of Object.entries(partParams)) { if (posePlayer?.ids.has(id)) continue; const i = partIndex.get(id); if (i !== undefined) op[i] = v; }
     model.update();
     draw();
     D.resetDynamicFlags?.();
@@ -204,12 +237,18 @@ export async function createStageLive2D(canvas, doc, { assetUrl, coreUrl } = {})
       const c = new OffscreenCanvas(W, H); c.getContext('2d').putImageData(out, 0, 0);
       return c.convertToBlob({ type: 'image/png' });
     },
-    info: () => ({ parameters: info.ids.map((id, i) => ({ id, min: info.min[i], max: info.max[i], def: info.def[i] })), drawables: D.count, motions: Object.fromEntries(Object.entries(motions).map(([g, l]) => [g, l.length])), version: Core.Version?.csmGetVersion?.(), canvas: { w: ci.CanvasWidth, h: ci.CanvasHeight } }),
+    info: () => ({ parameters: info.ids.map((id, i) => ({ id, min: info.min[i], max: info.max[i], def: info.def[i] })), parts: partIds.length, drawables: D.count, motions: Object.fromEntries(Object.entries(motions).map(([g, l]) => [g, l.length])), pose: posePlayer ? posePlayer.groups.length : 0, version: Core.Version?.csmGetVersion?.(), canvas: { w: ci.CanvasWidth, h: ci.CanvasHeight } }),
     values: () => values,
+    parts: () => Object.fromEntries(partIds.map((id, i) => [id, model.parts.opacities[i]])),
+    motionState: () => ({ playing: player.entries.length, priority: player.current, time: player.time }),
     setOverrides(o) { overrides = o && Object.keys(o).length ? o : null; },
-    playMotion: (g, i) => startMotion(g, i),
-    setIdle(g) { idleGroup = g; if (g) startMotion(g, 0); else motion = null; },
-    expressions: () => files.expressions.map((e, k) => ({ id: `exp:${k}`, name: e.name })),
+    playMotion: (g, i, priority) => startMotion(g, i, priority),
+    // a new idle group takes over when the current motion ends; none stops the idle motion (fading it out)
+    setIdle(g) { idleGroup = g; if (!g && player.current === PRIORITY.idle) for (const e of player.entries) player.fadeOut(e, e.m.fadeOut); },
+    expressions: () => [
+      ...files.expressions.map((e, k) => ({ id: `exp:${k}`, name: e.name })),
+      ...Object.entries(motions).flatMap(([g, list]) => list.map((m, i) => ({ id: `motion:${g}:${i}`, name: `${g || 'Motion'} ${i + 1}`, motion: true }))),
+    ],
     setExpression(k, w) { expW[k] = w; },
     dispose() {
       alive = false; cancelAnimationFrame(raf);

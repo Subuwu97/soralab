@@ -6,7 +6,7 @@ import { Button, IconButton, Select, Slider, NumberInput, PanelSection, Spinner,
 import { Icon } from '../../../components/Icons.jsx';
 import { POSE_KEYS } from '../contract.js';
 import { KEY_INFO } from '../tracking/pose.js';
-import { coreStatus, uploadCore, CORE_DOWNLOAD, CORE_LICENCE } from './core.js';
+import { coreStatus, uploadCore, fmtCoreVersion, CORE_DOWNLOAD, CORE_LICENCE } from './core.js';
 import { importModel } from './files.js';
 import { createStageLive2D, LIVE2D_BINDINGS } from './index.js';
 
@@ -81,7 +81,7 @@ export default function EditorLive2D({ project, h, doc, canEdit, ui }) {
       {core !== null && <PanelSection title="Cubism Core" id={coreMissing ? 'l2d-core-missing' : 'l2d-core'} defaultOpen={!!coreMissing}>
         {core.installed ? (
           <div className="text-[12px] text-fg2 flex flex-col gap-1">
-            <span className="flex items-center gap-1"><Icon name="check" size={13} className="text-ok" />Installed on this server{info?.version ? ` (version ${(info.version >>> 24)}.${(info.version >> 16) & 255}.${info.version & 0xffff})` : ''}.</span>
+            <span className="flex items-center gap-1"><Icon name="check" size={13} className="text-ok" />Installed on this server{fmtCoreVersion(info?.version) ? ` (version ${fmtCoreVersion(info.version)})` : ''}.</span>
             {core.can_upload && <Button size="sm" variant="ghost" onClick={addCore}>Replace with a newer Core…</Button>}
           </div>
         ) : <CoreHelp core={core} onUpload={addCore} />}
@@ -93,15 +93,15 @@ export default function EditorLive2D({ project, h, doc, canEdit, ui }) {
               <div key={g} className="flex items-center gap-1 text-[12px] h-7">
                 <span className="flex-1 truncate">{g || '(no group)'}</span>
                 {Array.from({ length: Math.min(n, 6) }, (_, i) => <IconButton key={i} icon="play" label={`Play ${g} ${i + 1}`} size={22} iconSize={11} onClick={() => stage.current?.playMotion(g, i)} />)}
-                <Toggle checked={(doc.idle ?? (info.motions.Idle ? 'Idle' : null)) === g} onChange={(v) => { edit((d) => ({ ...d, idle: v ? g : null }), 'Idle motion'); stage.current?.setIdle(v ? g : null); }} />
+                <Toggle checked={(doc.idle !== undefined ? doc.idle : (info.motions.Idle ? 'Idle' : null)) === g} onChange={(v) => { edit((d) => ({ ...d, idle: v ? g : null }), 'Idle motion'); stage.current?.setIdle(v ? g : null); }} />
               </div>
             ))}
             {!Object.keys(info.motions).length && <p className="text-xs text-fg3">No motions in this model.</p>}
-            <div className="text-[11px] text-fg3 mb-1">The switch picks the idle motion that loops while you perform.</div>
-            {(stage.current?.expressions() || []).map((x, k) => (
+            <div className="text-[11px] text-fg3 mb-1">The switch picks the idle group: one of its motions plays whenever nothing else does. ▶ plays a motion now, fading over from the one before.{info.pose ? ` The model’s pose switches ${info.pose} part group${info.pose === 1 ? '' : 's'}.` : ''}</div>
+            {(stage.current?.expressions() || []).filter((x) => !x.motion).map((x, k) => (
               <div key={x.id} className="flex items-center gap-2 h-7 text-[12px]"><Toggle checked={!!exprOn[k]} onChange={(v) => { setExprOn({ ...exprOn, [k]: v }); stage.current?.setExpression(k, v ? 1 : 0); }} /><span className="truncate">{x.name}</span></div>
             ))}
-            <p className="text-[11px] text-fg3">Give expressions hotkeys in Perform.</p>
+            <p className="text-[11px] text-fg3">Expressions fade in and out. Give expressions and motions hotkeys in Perform.</p>
           </PanelSection>
           <PanelSection title="Tracking → parameters" id="l2d-bind">
             <datalist id="l2d-params">{params.map((p) => <option key={p.id} value={p.id} />)}</datalist>

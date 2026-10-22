@@ -63,13 +63,14 @@ export async function loadModelFiles(model, urlOf) {
   };
   const m3 = await get(model.entry, 'json');
   const f = m3.FileReferences || {};
-  const [moc, textures, physics, expressions] = await Promise.all([
+  const [moc, textures, physics, pose, expressions] = await Promise.all([
     get(f.Moc, 'buf'),
     Promise.all((f.Textures || []).map((t) => get(t, 'image'))),
     f.Physics ? get(f.Physics, 'json').catch(() => null) : null,
+    f.Pose ? get(f.Pose, 'json').catch(() => null) : null,
     Promise.all((f.Expressions || []).map(async (e) => ({ name: e.Name || base(e.File).replace(/\.exp3\.json$/i, ''), data: await get(e.File, 'json').catch(() => null) }))),
   ]);
   const motions = {};
   for (const [group, list] of Object.entries(f.Motions || {})) motions[group] = list.map((x) => ({ file: x.File, fadeIn: x.FadeInTime, fadeOut: x.FadeOutTime, load: () => get(x.File, 'json') }));
-  return { model3: m3, moc, textures, physics, expressions: expressions.filter((e) => e.data), motions, groups: m3.Groups || [] };
+  return { model3: m3, moc, textures, physics, pose, expressions: expressions.filter((e) => e.data), motions, groups: m3.Groups || [] };
 }

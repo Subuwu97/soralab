@@ -128,6 +128,7 @@ export default function Perform({ project, h, doc, canEdit, ui }) {
       if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) && document.activeElement.type !== 'range') return;
       const m = match(e); if (!m || e.repeat) return;
       const [xid, v] = m; const t = tracker.current; e.preventDefault();
+      if (xid.startsWith('motion:')) { trigger(xid, v.mode); return; }
       if (v.mode === 'hold') t.expr[xid] = 1; else if (t.expr[xid]) delete t.expr[xid]; else t.expr[xid] = 1;
       setExprOn({ ...t.expr });
     };
@@ -136,6 +137,8 @@ export default function Perform({ project, h, doc, canEdit, ui }) {
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
   }, [perform.hotkeys]);
   const toggleExpr = (xid) => { const t = tracker.current; if (t.expr[xid]) delete t.expr[xid]; else t.expr[xid] = 1; setExprOn({ ...t.expr }); };
+  // Live2D motion hotkeys: pose.expr keeps a press count (so OBS output pages play it too); negative = only when free
+  function trigger(xid, mode) { const t = tracker.current; const n = Math.abs(t.expr[xid] || 0) + 1; t.expr[xid] = mode === 'normal' ? -n : n; }
 
   // ---------------------------------------------------------------- OBS output
   useEffect(() => {
@@ -263,10 +266,10 @@ export default function Perform({ project, h, doc, canEdit, ui }) {
         {exprList.map((x) => (
           <div key={x.id} className="py-1 border-b border-line/60" data-testid={`av-expr-${x.id}`}>
             <div className="flex items-center gap-1.5 h-8">
-              <Toggle checked={!!exprOn[x.id]} onChange={() => toggleExpr(x.id)} />
+              {x.motion ? <IconButton icon="play" label={`Play ${x.name}`} size={26} iconSize={12} onClick={() => trigger(x.id, perform.hotkeys[x.id]?.mode)} /> : <Toggle checked={!!exprOn[x.id]} onChange={() => toggleExpr(x.id)} />}
               <span className="flex-1 truncate text-[13px]">{x.name}</span>
               <HotkeyInput value={perform.hotkeys[x.id]?.key || ''} disabled={!canEdit} onChange={(k) => setPerform({ hotkeys: { ...perform.hotkeys, [x.id]: { mode: 'toggle', ...perform.hotkeys[x.id], key: k } } }, 'Expression hotkey')} />
-              <Select small value={perform.hotkeys[x.id]?.mode || 'toggle'} onChange={(v) => setPerform({ hotkeys: { ...perform.hotkeys, [x.id]: { key: '', ...perform.hotkeys[x.id], mode: v } } }, 'Expression hotkey')} options={[{ value: 'toggle', label: 'Toggle' }, { value: 'hold', label: 'Hold' }]} />
+              <Select small value={perform.hotkeys[x.id]?.mode || 'toggle'} onChange={(v) => setPerform({ hotkeys: { ...perform.hotkeys, [x.id]: { key: '', ...perform.hotkeys[x.id], mode: v } } }, 'Expression hotkey')} options={x.motion ? [{ value: 'toggle', label: 'Interrupt' }, { value: 'normal', label: 'If free' }] : [{ value: 'toggle', label: 'Toggle' }, { value: 'hold', label: 'Hold' }]} />
             </div>
             <GestureInput value={perform.gestures[x.id]} disabled={!canEdit} onChange={(g) => setPerform({ gestures: withGesture(perform.gestures, x.id, g) }, 'Gesture trigger')} />
           </div>
