@@ -20,6 +20,7 @@ import { warmUp } from './hwaccel.js';
 import { lanHttps } from './lan-https.js';
 import { suiteImageRoute } from './suite-images.js';
 import { suiteCors } from './suite-cors.js';
+import http from 'node:http';
 
 const app = express();
 app.disable('x-powered-by');
@@ -58,10 +59,12 @@ if (fs.existsSync(path.join(config.webDist, 'index.html'))) {
 
 // Sora Ningyō's pose relay (WebSocket) rides on both the plain and the HTTPS server.
 attachRelay(secure.listen(app));
-attachRelay(app.listen(config.port, config.host, () => {
+const plain = http.createServer(app);
+attachRelay(plain);
+secure.listenPlain(plain, config.port, config.host, () => {
   console.log(`[soralab] ${config.publicUrl} (listening ${config.host}:${config.port}) — accounts: ${config.accountsUrl}`);
   warmUp();
   resumeWebCopies();
   resumeJobs();
   scheduleCleanup();
-}));
+});

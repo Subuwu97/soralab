@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import https from 'node:https';
 import crypto from 'node:crypto';
+import net from 'node:net';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const OK_COOKIE = 'lan_https_ok';
@@ -46,6 +47,31 @@ export function lanHttps(opts) {
     return server;
   }
 
+
+  /**
+   * Starts the plain http server on its port so that https on the SAME port works too (the first byte of each
+   * connection says which). Browsers that try https:// first (Firefox's HTTPS-First) otherwise fail on the http port
+   * with SSL_ERROR_RX_RECORD_TOO_LONG instead of reaching the page. Without a certificate it's a normal listen.
+   */
+  function listenPlain(server, port, host, cb) {
+    if (!enabled) return server.listen(port, host, cb);
+    const tls = https.createServer({ cert: fs.readFileSync(opts.cert), key: fs.readFileSync(opts.key) });
+    tls.on('request', (req, res) => server.emit('request', req, res));
+    tls.on('upgrade', (...a) => server.emit('upgrade', ...a));
+    tls.on('tlsClientError', (e, sock) => sock.destroy());
+    const front = net.createServer((sock) => {
+      sock.once('error', () => sock.destroy());
+      sock.once('readable', () => {
+        const first = sock.read(1);
+        if (!first) return sock.destroy();
+        sock.unshift(first);
+        (first[0] === 22 ? tls : server).emit('connection', sock);
+      });
+    });
+    front.listen(port, host, cb);
+    return server;
+  }
+
   const page = (title, body) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title><style>
 body{margin:0;font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;background:#0b0f24;color:#e8ebff;display:grid;place-items:center;min-height:100vh;padding:20px;box-sizing:border-box}
@@ -81,5 +107,5 @@ ${fingerprint ? `<p>Check it's yours: SHA-256 fingerprint<br><code>${esc(fingerp
 <p style="margin-top:20px;font-size:13px">Only install certificates from servers you run or trust: whoever holds this server's key could vouch for any site on devices that trust it. It stays on your server and never leaves it.</p>`);
   }
 
-  return { enabled, routes, listen, secureUrl: enabled ? opts.publicUrl : null };
+  return { enabled, routes, listen, listenPlain, secureUrl: enabled ? opts.publicUrl : null };
 }
