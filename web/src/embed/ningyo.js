@@ -5,7 +5,7 @@
 //   const av = await mount({ canvas, link | (projectId and key), video, onStatus, background, hands });
 //   av.stream                     canvas.captureStream(30): send this instead of the webcam
 //   av.setBackground({ mode: 'color', color } | { mode: 'room' })   video tracks have no alpha, so something is behind
-//   av.setSize(w, h)   av.dispose()   av.stats() → { poses, tracking, kind, name }
+//   av.setSize(w, h)   av.dispose()   av.stats() → { poses, tracking, fps, hands, kind, name }
 //
 // The avatar loads through the project's output key (the same key routes the OBS output page uses), so no sign-in is
 // needed. `video` is the host app's webcam (a MediaStream or a <video>): it is only tracked here, never drawn, so the
@@ -98,8 +98,7 @@ export async function mount({ canvas, link, projectId, key, video = null, onStat
     g.drawImage(art, 0, 0, w, h);
   };
   raf = requestAnimationFrame(draw);
-  const stream = canvas.captureStream(30);
-  status({ state: 'ready', message: '' });
+  const stream = canvas.captureStream(30); // from here on onStatus follows the tracker
 
   return {
     stream, doc,
@@ -108,7 +107,7 @@ export async function mount({ canvas, link, projectId, key, video = null, onStat
       w = Math.max(16, Math.round(nw)); h = Math.max(16, Math.round(nh));
       canvas.width = w; canvas.height = h; art.width = w; art.height = h; stage.resize(w, h);
     },
-    stats: () => ({ poses, tracking: tracker.status.camera, fps: tracker.status.fps, kind: doc.kind, name: doc.name || '' }),
+    stats: () => ({ poses, tracking: tracker.status.camera, fps: tracker.status.fps, hands: !!tracker.status.hands, kind: doc.kind, name: doc.name || '' }),
     dispose() {
       if (!alive) return;
       alive = false; cancelAnimationFrame(raf);
