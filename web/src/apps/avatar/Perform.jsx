@@ -13,6 +13,7 @@ import { GestureInput, withGesture } from './gestures.jsx';
 import { createStage } from './stage.js';
 import { relaySender } from './relay.js';
 import { HotkeyInput } from './two/Panels2D.jsx';
+import GoLivePanel from './GoLive.jsx';
 
 export const defaultPerform = () => ({ bg: { mode: 'color', color: '#1d1f26' }, framing: { zoom: 1, x: 0, y: 0 }, hotkeys: {}, gestures: {}, output: { width: 1920, height: 1080 } });
 export const withPerformDefaults = (p) => { const d = defaultPerform(); return { ...d, ...p, bg: { ...d.bg, ...p?.bg }, framing: { ...d.framing, ...p?.framing }, output: { ...d.output, ...p?.output }, hotkeys: { ...p?.hotkeys }, gestures: { ...p?.gestures } }; };
@@ -40,6 +41,7 @@ export default function Perform({ project, h, doc, canEdit, ui }) {
   const [watchers, setWatchers] = useState(0);
   const [exprOn, setExprOn] = useState({});
   const [recording, setRecording] = useState(null);
+  const [live, setLive] = useState(null); // Go live on Tsunami: { on, background } (the stage's own background is hidden then)
   const [devices, setDevices] = useState({ video: [], audio: [] });
   const [cam, setCam] = useState(''); const [micDev, setMicDev] = useState('');
   const [showCam, setShowCam] = useState(true);
@@ -53,12 +55,12 @@ export default function Perform({ project, h, doc, canEdit, ui }) {
     let off = false; let made = null;
     setStageErr(null);
     createStage(doc, canvas.current, { assetUrl: (a) => `/api/assets/${a}/file`, coreUrl: '/api/avatar/cubism-core.js' })
-      .then((s) => { if (off) { s.dispose(); return; } made = s; stage.current = s; window.__avatarStage = s; s.setBackground(bgCss(perform.bg)); s.setFraming?.(perform.framing); fit(); setExprList(s.expressions?.() || []); })
+      .then((s) => { if (off) { s.dispose(); return; } made = s; stage.current = s; window.__avatarStage = s; s.setBackground(live?.on ? null : bgCss(perform.bg)); s.setFraming?.(perform.framing); fit(); setExprList(s.expressions?.() || []); })
       .catch((e) => { if (!off) setStageErr(e); });
     return () => { off = true; made?.dispose(); if (stage.current === made) stage.current = null; };
   }, [kindDocKey]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (doc.kind !== 'live2d') { stage.current?.setDoc?.(doc); setExprList(stage.current?.expressions?.() || []); } }, [doc]);
-  useEffect(() => { stage.current?.setBackground(bgCss(perform.bg)); stage.current?.setFraming?.(perform.framing); }, [perform.bg, perform.framing]);
+  useEffect(() => { stage.current?.setBackground(live?.on ? null : bgCss(perform.bg)); stage.current?.setFraming?.(perform.framing); }, [perform.bg, perform.framing, live?.on]);
   const fit = () => { const s = stage.current; if (!s || !box.current) return; const r = box.current.getBoundingClientRect(); s.resize(Math.round(r.width * devicePixelRatio), Math.round(r.height * devicePixelRatio)); };
   useEffect(fit, [size.width, size.height]);
 
@@ -214,6 +216,7 @@ export default function Perform({ project, h, doc, canEdit, ui }) {
   const t = tracking;
   const panels = (
     <div>
+      {canEdit && <GoLivePanel docId={id} name={project.doc.name} stage={stage} canvas={canvas} onLive={setLive} />}
       <PanelSection title="Output for OBS" id="avp-obs">
         {!canEdit ? <p className="text-xs text-fg3">Only editors of this project can stream it.</p> : (
           <div className="flex flex-col gap-2">
@@ -317,7 +320,7 @@ export default function Perform({ project, h, doc, canEdit, ui }) {
       {ui.portal('panels', panels)}
       {ui.portal('status', <><span>Perform</span><span>{status.camera === 'tracking' ? 'Face tracked' : status.puppet ? 'Puppet' : 'Idle'}</span>{t.hands && <span>{status.hands ? 'Hands on' : 'Hands (start the camera)'}</span>}{status.mic && <span>Mic lip-sync</span>}{watchers > 0 && <span className="text-ok">OBS output live</span>}</>)}
       <div ref={box} className="absolute inset-0" data-puppet-area="1"
-        style={bgMode === 'transparent' ? { background: 'repeating-conic-gradient(#2a2b31 0% 25%, #1f2026 0% 50%) 50% / 24px 24px' } : undefined}>
+        style={live?.on ? { background: live.background } : bgMode === 'transparent' ? { background: 'repeating-conic-gradient(#2a2b31 0% 25%, #1f2026 0% 50%) 50% / 24px 24px' } : undefined}>
         <canvas ref={canvas} className="absolute inset-0 w-full h-full" data-testid="av-stage" />
         {stageErr && (
           <div className="absolute inset-0 grid place-items-center p-6 text-center">
@@ -328,6 +331,7 @@ export default function Perform({ project, h, doc, canEdit, ui }) {
           </div>
         )}
         {showCam && camOn && <canvas ref={preview} className="absolute left-3 bottom-3 rounded-lg border border-line shadow-lg w-[200px]" />}
+        {live?.on && <div className="absolute top-3 right-3 text-[11px] font-semibold tracking-wide bg-danger text-white rounded px-2 py-0.5">ON TSUNAMI</div>}
         {recording && <div className="absolute top-3 left-3 flex items-center gap-1.5 text-[12px] bg-black/60 text-white rounded-full px-2.5 py-1"><span className="w-2 h-2 rounded-full bg-danger animate-pulse" />Recording</div>}
       </div>
     </>
