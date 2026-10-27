@@ -102,6 +102,22 @@ Sora Ningyō (人形, "puppet") makes and performs VTuber avatars. New projects 
 - No camera? A mouse/keyboard puppet (the mouse moves the head and eyes, hold the button to talk, B blinks), and mic lip-sync (loudness opens the mouth, vowel shapes from the voice).
 - Expression hotkeys (toggle or hold) and gesture triggers, a background colour, chroma green or transparent, PNG snapshots and WebM recording (with transparency).
 - **OBS:** copy the output link into an OBS *Browser Source*. The page has a transparent background and follows the Perform page live through a small WebSocket relay on the SoraLab server (about 30 poses a second, rate-limited). The link holds a random key, which the owner can reset; it needs no sign-in. "Pop-out window" opens the same view in a window for *Window Capture*.
+- **Go live on Tsunami** (needs the Mirai suite: `TSUNAMI_URL` and `SUITE_SECRET`; the panel is hidden without them): stream the avatar straight to Tsunami Live from the browser, no OBS needed.
+  - Choose the channel (your own or a brand channel you own), the title, Public / Unlisted / Private, live chat on or off, and 720p (3 Mbps) or 1080p (6 Mbps), 30 fps.
+  - Video can't be transparent, so the avatar is drawn on a background: a colour or a picture from your files. The panel shows what viewers see, and the stage shows the same background while you're live.
+  - Sound: your mic (on/off and which mic; both can change while live) and, if you like, the sound of a tab or the whole desktop ("Add tab or desktop sound…", then tick *Share audio* in the browser's dialog).
+  - While live: a timer, the bitrate and frame rate, dropped frames, a health light (Good / Unsteady / Poor) and a link to the live page on Tsunami. *End stream* ends it on Tsunami, and the recording becomes a video there as usual.
+  - How it works: the page records the picture and sound with MediaRecorder (WebM, or H.264 where the browser has it) and sends it over a WebSocket to the SoraLab server. There ffmpeg re-encodes it to H.264/AAC (on the GPU when there is one, like renders; H.264 from the browser is sent as it is) with a keyframe every 2 s, and pushes it to Tsunami's RTMP ingest with a one-time stream key from Tsunami. So the channel's own OBS key never leaves Tsunami, and Tsunami's usual checks (suspended channels, live streaming turned off) apply.
+  - Only editors of the project can stream it, and each person can run one stream at a time. If anything stops it (the encoder, the network, Tsunami, a closed tab), the panel says why in plain words.
+  - Keep the tab visible while you're live: browsers pause drawing in background tabs, and the stream would freeze.
+
+**Your avatar as a camera in Hikari:** with the suite, Hikari's Settings → Voice & Video → *Camera source* can send a Sora Ningyō avatar instead of your webcam.
+- Hikari lists your own avatar projects (it asks SoraLab with your sign-in, which works because both apps are on the same host). You can also paste an avatar's output link.
+- The avatar runs inside Hikari's page from SoraLab's embeddable module, `/embed/ningyo.js`. Hikari passes it the webcam, which is used only for face (and optional hand) tracking on your device. The call gets the avatar drawn on a canvas, never the camera picture.
+- The project's own tracking settings, neutral pose, framing and gesture triggers apply. The avatar and its files load through the project's output key, as with the OBS link, so resetting that key stops Hikari using it too.
+- Video can't be see-through, so the avatar stands on a solid colour or on "room colours" (the camera shrunk to a few pixels and blurred, so nothing in it can be recognised).
+- For developers: `const { mount } = await import('<SoraLab>/embed/ningyo.js')`, then `mount({ canvas, link | projectId + key, video, onStatus, background, hands })`. It returns `{ stream, setBackground, setSize, stats, dispose }`, where `stream` is `canvas.captureStream(30)`. The module is a second Vite build (see `web/vite.config.js`) into `dist/embed/`. Its chunks, worker and wasm resolve against the module's own address, so they load from SoraLab wherever it's imported.
+- Only the origins in `SUITE_ORIGINS` (written by the suite's setup) can load the module, its files, the models and the key routes, or call `GET /api/avatar/mine`. That endpoint returns your avatar projects with their output keys. It is owner-only and needs credentials. Other sites are refused.
 
 The face and hand models (`web/public/models/`, Apache 2.0, about 11.5 MB) and the MediaPipe runtime come with SoraLab, so tracking works on a home network without internet. See `web/public/models/NOTICE.txt`.
 
@@ -233,6 +249,7 @@ For development, run `npm run dev:server` and `npm run dev:web` (Vite on port 51
 | `SESSION_SECRET` | Signs sign-in cookies. Any long random string. |
 | `SUITE_SECRET` | Shared with the suite. Turns on Minami Cloud, Tsunami publishing and notifications. |
 | `CLOUD_URL`, `TSUNAMI_URL`, `PHOTOS_URL` | Where the other suite apps are. Leave these empty to turn those features off. |
+| `TSUNAMI_RTMP_URL` | Tsunami's RTMP ingest for Sora Ningyō's *Go live*, e.g. `rtmp://127.0.0.1:1935/live`. The suite's setup writes it. If it's empty, SoraLab uses Tsunami's internal host and the RTMP port Tsunami reports. |
 | `DATA_DIR` | Where projects, uploads, fonts and the database are kept (default `server/data`). |
 | `MAX_UPLOAD_MB`, `MAX_DOC_MB` | Largest upload (default 4096 MB) and largest saved project (default 512 MB). |
 | `STORAGE_GB_PER_USER` | Storage limit per person. `0` means no limit. |
@@ -241,6 +258,7 @@ For development, run `npm run dev:server` and `npm run dev:web` (Vite on port 51
 | `RENDER_JOBS` | How many renders run at the same time (default 1). |
 | `VERSIONS_PER_DOC` | Automatic versions kept per project (default 50; named versions are always kept). |
 | `CLEANUP_EVERY_HOURS`, `CLEANUP_GRACE_HOURS` | Storage cleanup: how often it runs (default 6; `0` = only from Admin or Files) and how old an unused autosaved file must be before it goes (default 24, at least 1). |
+| `SUITE_ORIGINS` (or `HIKARI_URL`) | Comma-separated web addresses of suite apps whose pages may use Sora Ningyō avatars, for Hikari's avatar camera. The suite's setup writes Hikari's address, its http:// network address and its localhost ports. Leave it empty to allow none. |
 | `HTTPS_PORT`, `TLS_CERT`, `TLS_KEY`, `LAN_CA_CERT` | HTTPS on your network. The suite's setup fills these in. |
 | `COOKIE_SECURE`, `TRUST_PROXY` | Set both to `true` behind an HTTPS reverse proxy such as Caddy. |
 
