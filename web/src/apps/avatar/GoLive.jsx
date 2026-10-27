@@ -79,7 +79,11 @@ export default function GoLivePanel({ docId, name, stage, canvas, onLive }) {
   // ---------------------------------------------------------------- audio: mic + tab/desktop, mixed into one track
   const audio = () => {
     const x = s.current;
-    if (!x.ctx) { x.ctx = new AudioContext({ sampleRate: 48000 }); x.dest = x.ctx.createMediaStreamDestination(); }
+    if (!x.ctx) {
+      x.ctx = new AudioContext({ sampleRate: 48000 }); x.dest = x.ctx.createMediaStreamDestination();
+      // A silent source keeps the audio track running with the mic off; otherwise the recording never starts.
+      const quiet = x.ctx.createConstantSource(); quiet.offset.value = 0; quiet.connect(x.dest); quiet.start();
+    }
     return x;
   };
   async function openMic(deviceId) {
@@ -223,11 +227,12 @@ export default function GoLivePanel({ docId, name, stage, canvas, onLive }) {
           {ch?.reason && !busy && <p className="text-[11px] text-fg3">{ch.reason}</p>}
           <TextInput value={opts.title} maxLength={100} disabled={busy} placeholder="Stream title" onChange={(e) => setOpts((o) => ({ ...o, title: e.target.value }))} className="!h-7 text-[12px]" data-testid="golive-title" />
           <div className="flex items-center gap-1.5">
-            <Select small value={opts.visibility} disabled={busy} onChange={(v) => set({ visibility: v })} className="flex-1" data-testid="golive-visibility"
-              options={[{ value: 'public', label: 'Public' }, { value: 'unlisted', label: 'Unlisted (link only)' }, { value: 'private', label: 'Private (only you)' }]} />
-            <Select small value={opts.quality} disabled={busy} onChange={(v) => set({ quality: v })} data-testid="golive-quality"
-              options={[{ value: '720p', label: '720p · 3 Mbps' }, { value: '1080p', label: '1080p · 6 Mbps' }]} />
+            <Select small value={opts.visibility} disabled={busy} onChange={(v) => set({ visibility: v })} className="flex-1 min-w-0" data-testid="golive-visibility"
+              options={[{ value: 'public', label: 'Public' }, { value: 'unlisted', label: 'Unlisted' }, { value: 'private', label: 'Private' }]} />
+            <Select small value={opts.quality} disabled={busy} onChange={(v) => set({ quality: v })} className="flex-1 min-w-0" data-testid="golive-quality"
+              options={[{ value: '720p', label: '720p' }, { value: '1080p', label: '1080p' }]} />
           </div>
+          <p className="text-[11px] text-fg3 -mt-1">{{ public: 'Anyone can find it; subscribers are told.', unlisted: 'Only people with the link can watch.', private: 'Only you (and Tsunami staff) can watch.' }[opts.visibility]} {opts.quality === '1080p' ? '1080p at 6 Mbps' : '720p at 3 Mbps'}, 30 fps.</p>
           <Toggle label="Live chat" checked={opts.chat} disabled={busy} onChange={(v) => set({ chat: v })} />
           <div className="text-[11px] text-fg3 -mb-1">Background (video can’t be transparent)</div>
           <div className="flex items-center gap-1.5">
