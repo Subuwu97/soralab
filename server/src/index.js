@@ -19,6 +19,7 @@ import { notifier } from './notify.js';
 import { warmUp } from './hwaccel.js';
 import { lanHttps } from './lan-https.js';
 import { suiteImageRoute } from './suite-images.js';
+import { suiteCors } from './suite-cors.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -29,6 +30,8 @@ const secure = lanHttps({ appName: 'SoraLab', httpsPort: config.httpsPort, cert:
 secure.routes(app);
 // Editors use SharedArrayBuffer-free features only, but pages must never be framed by other sites.
 app.use((req, res, next) => { res.set('X-Frame-Options', 'SAMEORIGIN'); next(); });
+// Sora Ningyō avatars in the suite's other apps (Hikari's camera): CORS for their origins only.
+app.use(suiteCors);
 
 app.use(session);
 app.use(authRouter);

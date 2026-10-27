@@ -33,6 +33,11 @@ export const config = {
   photosUrl: url(process.env.PHOTOS_URL),
   tsunamiUrl: url(process.env.TSUNAMI_URL),
   tsunamiInternalUrl: url(process.env.TSUNAMI_INTERNAL_URL || process.env.TSUNAMI_URL),
+  // Tsunami's RTMP ingest for Sora Ningyō's "Go live" (default: Tsunami's internal host on the port Tsunami reports).
+  tsunamiRtmpUrl: url(process.env.TSUNAMI_RTMP_URL),
+  // Other suite apps' web addresses that may use Sora Ningyō avatars from their pages (Hikari's avatar camera): its public
+  // URL, its https:// network address and dev ports. Written by the suite's setup; see suite-cors.js.
+  suiteOrigins: [...new Set([...String(process.env.SUITE_ORIGINS || '').split(','), process.env.HIKARI_URL || ''].map((o) => { try { return new URL(o.trim()).origin; } catch { return ''; } }).filter(Boolean))],
   // Limits. Storage is per person (projects, assets, fonts and exports); 0 = unlimited.
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB || 4096),
   maxDocMb: Number(process.env.MAX_DOC_MB || 512),

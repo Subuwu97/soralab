@@ -16,6 +16,7 @@ import { config } from '../config.js';
 import { db, now } from '../db.js';
 import { requireUser, requireAdmin, session } from '../auth.js';
 import { h, fail, loadDoc, roleFor, assetFile, assetDir } from './util.js';
+import { golive, goLiveUpgrade, GOLIVE_PATH } from './golive.js';
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS avatar_keys (
@@ -25,6 +26,7 @@ CREATE TABLE IF NOT EXISTS avatar_keys (
 );`);
 
 export const avatar = express.Router();
+avatar.use(golive); // "Go live on Tsunami" (golive.js)
 const coreDir = path.join(config.dataDir, 'avatar');
 const coreFile = path.join(coreDir, 'live2dcubismcore.min.js');
 fs.mkdirSync(coreDir, { recursive: true });
@@ -62,6 +64,32 @@ avatar.post('/avatar/:id/output-key/reset', requireUser, (req, res) => {
   const key = keyFor(doc.id, true);
   relayClose(doc.id); // pages using the old link stop receiving
   res.json({ key });
+});
+/**
+ * Your own avatar projects with their output keys, for another suite app's avatar picker (Hikari's camera source; it
+ * calls this with credentials, see ../suite-cors.js). Only the owner's projects: a key lets anyone with it show the avatar.
+ */
+avatar.get('/avatar/mine', requireUser, (req, res) => {
+  const rows = db.prepare("SELECT * FROM docs WHERE owner = ? AND app = 'avatar' AND trashed_at IS NULL ORDER BY COALESCE(opened_at, updated_at) DESC LIMIT 200").all(req.user.id);
+  res.set('Cache-Control', 'no-store').json(rows.map((d) => {
+    const key = keyFor(d.id); const q = `key=${encodeURIComponent(key)}`;
+    let kind = null; try { kind = JSON.parse(d.meta || '{}').kind || null; } catch { /* old meta */ }
+    return {
+      id: d.id, name: d.name, kind, key, updated_at: d.updated_at,
+      link: `${config.publicUrl}/avatar/${d.id}/output?${q}`,
+      thumb: d.has_thumb ? `${config.publicUrl}/api/avatar/${d.id}/out/thumb?${q}&v=${d.rev}` : null,
+    };
+  }));
+});
+/** The project's thumbnail, for pickers holding the key. */
+avatar.get('/avatar/:id/out/thumb', (req, res) => {
+  const doc = needKey(req);
+  const f = path.join(config.dataDir, 'docs', doc.id, 'thumb');
+  if (!doc.has_thumb || !fs.existsSync(f)) return res.status(404).end();
+  let type = 'image/png';
+  try { type = fs.readFileSync(`${f}.type`, 'utf8').trim(); } catch { /* png */ }
+  res.set('X-Content-Type-Options', 'nosniff').set('Content-Security-Policy', "default-src 'none'; sandbox").set('Cache-Control', 'private, max-age=86400');
+  res.type(/^image\/(png|jpeg|webp)$/.test(type) ? type : 'application/octet-stream').sendFile(f);
 });
 /** The project's contents for the output page. */
 avatar.get('/avatar/:id/out/data', (req, res) => {
@@ -183,6 +211,7 @@ export function attachRelay(server) {
   server.on('upgrade', (req, socket) => {
     let u;
     try { u = new URL(req.url, 'http://localhost'); } catch { return reject(socket, 400, 'Bad Request'); }
+    if (u.pathname === GOLIVE_PATH) return goLiveUpgrade(req, socket, u);
     if (u.pathname !== '/api/avatar/relay') { if (server.listenerCount('upgrade') === 1) socket.destroy(); return; }
     const wsKey = req.headers['sec-websocket-key'];
     if (!wsKey || String(req.headers.upgrade).toLowerCase() !== 'websocket') return reject(socket, 400, 'Bad Request');

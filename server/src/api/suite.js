@@ -20,6 +20,9 @@ const key = new TextEncoder().encode(config.suiteSecret || 'unset');
 const token = (u, aud) => new SignJWT({ username: u.username, name: u.name, email: u.email || undefined, picture: u.picture || undefined, iss: 'soralab' })
   .setProtectedHeader({ alg: 'HS256' }).setSubject(u.id).setAudience(aud).setIssuedAt().setExpirationTime('10m').sign(key);
 
+/** The same signed token, for other server modules that call the suite (Sora Ningyō's Go live). */
+export const suiteToken = token;
+
 export const cloudEnabled = () => !!(config.suiteSecret && config.cloudInternalUrl);
 export const tsunamiEnabled = () => !!(config.suiteSecret && config.tsunamiInternalUrl);
 
