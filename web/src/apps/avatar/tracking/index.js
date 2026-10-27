@@ -3,6 +3,7 @@
 //
 //   const tr = new Tracker({ onPose(pose, info) {}, onStatus(s) {} })
 //   await tr.startCamera(deviceId)   tr.stopCamera()     tr.video  (the <video> for a preview)
+//   await tr.startCamera(null, stream)  tracks a stream the caller opened (and keeps: stopCamera doesn't stop it)
 //   await tr.startMic(deviceId)      tr.stopMic()
 //   tr.setPuppet(true)               mouse = head and eyes, hold the mouse button = talk, B = blink, ←/→ = tilt
 //   tr.settings = withTrackingDefaults(doc.tracking)       tr.neutral() → values for settings.neutral
@@ -17,9 +18,21 @@
 import { rawPose, PoseShaper, setNeutral, withTrackingDefaults } from './pose.js';
 import { MicLipSync } from './mic.js';
 import { HandShaper } from './hands.js';
+import faceWorkerUrl from './face.worker.js?worker&url';
 
 export { withTrackingDefaults, defaultTracking, KEY_INFO, setNeutral, packPose, rawPose, PoseShaper } from './pose.js';
 export { HandShaper, HAND_KEY_INFO, GESTURES, GESTURE_LABELS, demoHand } from './hands.js';
+
+// The worker and the MediaPipe models come from wherever this module was loaded from: the page's own server normally,
+// SoraLab's when the avatar is embedded in another suite app (../../../embed/ningyo.js).
+const assetOrigin = new URL(import.meta.url).origin;
+// Browsers only start workers from the page's own origin. Embedded elsewhere, a tiny same-origin worker imports ours
+// (SoraLab serves the module and its files with CORS for the suite's apps).
+function trackingWorker() {
+  const url = new URL(faceWorkerUrl, import.meta.url);
+  if (url.origin === location.origin) return new Worker(url, { type: 'module' });
+  return new Worker(URL.createObjectURL(new Blob([`import ${JSON.stringify(url.href)};`], { type: 'text/javascript' })), { type: 'module' });
+}
 
 export class Tracker {
   constructor({ onPose, onStatus, onExpr } = {}) {
@@ -40,10 +53,13 @@ export class Tracker {
   setStatus(p) { this.status = { ...this.status, ...p }; this.onStatus?.(this.status); }
 
   // ---------------------------------------------------------------- camera
-  async startCamera(deviceId) {
+  /** given: a camera stream someone else opened (the embed: the host app owns the webcam), which stopCamera leaves running. */
+  async startCamera(deviceId, given = null) {
     this.stopCamera();
     this.setStatus({ camera: 'loading', message: 'Starting the camera…' });
-    try {
+    this.ownStream = !given;
+    if (given) this.stream = given;
+    else try {
       this.stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: deviceId ? { exact: deviceId } : undefined, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } }, audio: false });
     } catch (e) {
       this.setStatus({ camera: 'error', message: e?.name === 'NotAllowedError' ? 'Camera access was blocked. Allow it in the browser’s address bar, or use the mouse puppet.' : 'No camera found. You can use the mouse puppet and the mic instead.' });
@@ -61,7 +77,8 @@ export class Tracker {
     return true;
   }
   stopCamera() {
-    this.stream?.getTracks().forEach((t) => t.stop()); this.stream = null;
+    if (this.ownStream) this.stream?.getTracks().forEach((t) => t.stop());
+    this.stream = null;
     if (this.video) this.video.srcObject = null;
     this.raw = null; this.landmarks = null;
     if (this.status.camera !== 'off') this.setStatus({ camera: 'off', message: '', fps: 0 });
@@ -69,13 +86,13 @@ export class Tracker {
   startWorker() {
     if (this.workerReady) return this.syncHands();
     if (!this.worker) {
-      this.worker = new Worker(new URL('./face.worker.js', import.meta.url), { type: 'module' });
+      this.worker = trackingWorker();
       this.worker.onmessage = ({ data }) => this.onWorker(data);
     }
     return new Promise((resolve, reject) => {
       this.readyWait = { resolve, reject };
       this.worker.onerror = (e) => { e.preventDefault?.(); reject(new Error(e.message || 'the tracking worker failed')); };
-      this.worker.postMessage({ t: 'init', origin: location.origin, withHands: !!this.settings.hands, handConfidence: this.settings.handConfidence });
+      this.worker.postMessage({ t: 'init', origin: assetOrigin, withHands: !!this.settings.hands, handConfidence: this.settings.handConfidence });
     });
   }
   /** Loads or drops the hand model when the setting changes (the camera keeps running). */
@@ -85,7 +102,7 @@ export class Tracker {
     this.handsSig = want; this.resyncing = true;
     if (!this.settings.hands) { this.hands = null; this.handShaper.reset(); }
     else this.setStatus({ message: this.status.camera === 'tracking' ? 'Loading hand tracking…' : this.status.message });
-    this.worker.postMessage({ t: 'init', origin: location.origin, withHands: !!this.settings.hands, handConfidence: this.settings.handConfidence });
+    this.worker.postMessage({ t: 'init', origin: assetOrigin, withHands: !!this.settings.hands, handConfidence: this.settings.handConfidence });
     return Promise.resolve();
   }
   onWorker(d) {

@@ -7,7 +7,8 @@ import loaderUrl from '@mediapipe/tasks-vision/vision_wasm_module_internal.js?ur
 import wasmUrl from '@mediapipe/tasks-vision/vision_wasm_module_internal.wasm?url';
 
 let face = null; let hands = null; let delegate = 'GPU';
-const fileset = () => ({ wasmLoaderPath: new URL(loaderUrl, self.location.href).href, wasmBinaryPath: new URL(wasmUrl, self.location.href).href });
+// (relative to this module, not self.location: embedded in another app, the worker starts from a blob: URL)
+const fileset = () => ({ wasmLoaderPath: new URL(loaderUrl, import.meta.url).href, wasmBinaryPath: new URL(wasmUrl, import.meta.url).href });
 
 // MediaPipe's loader sets self.ModuleFactory when its script first runs and clears it after making a task; in a
 // module worker the script is imported (cached) only once, so we keep the factory and put it back for each task.
